@@ -23,10 +23,11 @@
 5. 在`.env`文件中配置您的OpenRouter基础URL、OpenRouter API密钥和OpenRouter模型名称
 6. 运行应用程序：`python -m streamlit run run.py --browser.gatherUsageStats false --client.toolbarMode "viewer" --global.storeCachedForwardMessagesInMemory false --global.developmentMode false`
 
-## 模型选择
+## 已测试模型
 
-1. 推荐：`anthropic/claude-3.5-sonnet:beta`
-2. 能用，但不推荐：`openai/gpt-4o-mini`、`google/gemini-flash-1.5`
+1. anthropic/claude-3.5-sonnet:beta
+2. openai/gpt-4o-mini
+3. google/gemini-flash-1.5
 
 ## 使用说明
 
@@ -52,4 +53,4 @@
 
 ## 致谢
 
-本项目基于[Anthropic的Computer Use Demo](https://github.com/anthropics/anthropic-quickstarts/tree/main/computer-use-demo)，参考[Cognitive-Creators-AI的AI-on-windows](https://github.com/Cognitive-Creators-AI/AI-on-windows)和[jessy2027的computer-use](https://github.com/jessy2027/computer-use)，在Windows系统上通过OpenRouter API原生运行，无需Docker容器和Anthropic官方API。原始实现的所有功劳归属于Anthropic。
+本项目基于[Anthropic的Computer Use Demo](https://github.com/anthropics/anthropic-quickstarts/tree/main/computer-use-demo)，参考[Cognitive-Creators-AI的AI-on-windows](https://github.com/Cognitive-Creators-AI/Claude-on-windows)和[jessy2027的computer-use](https://github.com/jessy2027/computer-use)，在Windows系统上通过OpenRouter API原生运行，无需Docker容器和Anthropic官方API。原始实现的所有功劳归属于Anthropic。
