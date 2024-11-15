@@ -86,7 +86,11 @@ async def main():
     st.title("让AI控制你的电脑")
 
     with st.sidebar:
-
+        st.text_area(
+            "模型名称",
+            key="model",
+            help="选择OpenRouter的模型",
+        )
         st.text_area(
             "自定义系统提示",
             key="custom_system_prompt",

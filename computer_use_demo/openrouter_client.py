@@ -146,6 +146,7 @@ class OpenrouterClient:
                                             { "type": "number" },
                                             { "type": "number" },
                                         ],
+                                        "items": { "type": "number" },
                                         "description": "'coordinate' is required for action of 'mouse_move' or 'left_click_drag'"
                                     }
                                 },
@@ -186,10 +187,6 @@ class OpenrouterClient:
                     
                     if "message" not in openrouter_response['choices'][0]:
                         raise ValueError(f"Response missing 'message' field: {openrouter_response}")
-                    
-                    content = openrouter_response['choices'][0].get("message", {}).get("content", "")
-                    if not content:
-                        raise ValueError("Empty response content from Openrouter")
                         
                 except Exception as e:
                     if isinstance(e, (ValueError, RuntimeError)):
@@ -197,7 +194,8 @@ class OpenrouterClient:
                     raise RuntimeError(f"Unexpected error while getting response from Openrouter: {e}")
                 
                 content = []
-                content.append({"type": "text", "text": openrouter_response['choices'][0]["message"]["content"]})
+                if openrouter_response['choices'][0]["message"]["content"] is not None:
+                    content.append({"type": "text", "text": openrouter_response['choices'][0]["message"]["content"]})
                 if 'tool_calls' in openrouter_response['choices'][0]['message'].keys():
                     content.append({"type": "tool_use", 
                                     "name": openrouter_response['choices'][0]['message']['tool_calls'][0]['function']['name'],
