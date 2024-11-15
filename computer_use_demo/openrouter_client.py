@@ -21,9 +21,10 @@ class OpenrouterClient:
     
     SUPPORTED_MODELS = ["anthropic/claude-3.5-sonnet:beta"]  # List of supported models
     
-    def __init__(self, base_url: str = None, api_key: str = None):
+    def __init__(self, base_url: str = None, api_key: str = None, model: str = None):
         self.base_url = base_url
         self.api_key = api_key
+        self.model = model
         # Initialize beta property immediately
         self.beta = self.Beta(self)
         self._initialized = False
@@ -57,7 +58,6 @@ class OpenrouterClient:
                 self,
                 max_tokens: int,
                 messages: list[dict],
-                model: str,
                 system: list[dict],
                 tools: list[dict],
                 betas: list[str],
@@ -90,7 +90,7 @@ class OpenrouterClient:
                     if msg["role"] not in ["user", "assistant", "system", "tool"]:
                         raise ValueError(f"Invalid message role: {msg['role']}")
                 
-                if not model:
+                if not self.client.model:
                     raise ValueError("Model name is required")
                 
                 system_prompt = system[0].get("text", "") if system else ""
@@ -106,7 +106,7 @@ class OpenrouterClient:
                 
                 # Prepare Openrouter request
                 request_data = {
-                    "model": model,
+                    "model": self.client.model,
                     "messages": openrouter_messages,
                     "stream": False,
                     "max_tokens": max_tokens,
@@ -211,8 +211,8 @@ class OpenrouterClient:
                     type="message",
                     role="assistant",
                     content=content,
-                    model=model,
-                    stop_reason= "tool_use" if openrouter_response['choices'][0]['finish_reason'] == "tool_calls" else openrouter_response['choices'][0]['finish_reason'],
+                    model=self.client.model,
+                    stop_reason= "tool_use" if openrouter_response['choices'][0]['finish_reason'] == "tool_calls" else "stop_sequence",
                     stop_sequence=None,
                     usage={
                         "input_tokens": openrouter_response['usage']['prompt_tokens'],  

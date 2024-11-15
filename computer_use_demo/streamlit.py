@@ -23,7 +23,6 @@ from anthropic.types.beta import (
 from streamlit.delta_generator import DeltaGenerator
 
 from computer_use_demo.loop import (
-    PROVIDER_TO_DEFAULT_MODEL_NAME,
     APIProvider,
     sampling_loop,
 )
@@ -58,12 +57,12 @@ def setup_state():
         st.session_state.api_key = os.getenv("OPENROUTER_API_KEY", "")
     if "base_url" not in st.session_state:
         st.session_state.base_url = os.getenv("OPENROUTER_BASE_URL", "")
+    if "model" not in st.session_state:
+        st.session_state.model = os.getenv("OPENROUTER_MODEL", "")
     if "provider" not in st.session_state:
         st.session_state.provider = APIProvider.OPENROUTER.value
     if "provider_radio" not in st.session_state:
         st.session_state.provider_radio = st.session_state.provider
-    if "model" not in st.session_state:
-        _reset_model()
     if "auth_validated" not in st.session_state:
         st.session_state.auth_validated = False
     if "responses" not in st.session_state:
@@ -78,19 +77,13 @@ def setup_state():
         st.session_state.hide_images = False
 
 
-def _reset_model():
-    st.session_state.model = PROVIDER_TO_DEFAULT_MODEL_NAME[
-        cast(APIProvider, st.session_state.provider)
-    ]
-
-
 async def main():
     """Render loop for streamlit"""
     setup_state()
 
     st.markdown(STREAMLIT_STYLE, unsafe_allow_html=True)
 
-    st.title("让Claude控制你的电脑")
+    st.title("让AI控制你的电脑")
 
     with st.sidebar:
 
@@ -104,7 +97,7 @@ async def main():
 
     chat, http_logs = st.tabs(["对话", "HTTP日志"])
     new_message = st.chat_input(
-        "给Claude发送消息以控制你的电脑..."
+        "给AI发送消息以控制你的电脑..."
     )
 
     with chat:
@@ -153,7 +146,6 @@ async def main():
             # run the agent sampling loop with the newest message
             st.session_state.messages = await sampling_loop(
                 system_prompt_suffix=st.session_state.custom_system_prompt,
-                model=st.session_state.model,
                 provider=st.session_state.provider,
                 messages=st.session_state.messages,
                 output_callback=partial(_render_message, Sender.BOT),
@@ -167,6 +159,7 @@ async def main():
                 ),
                 api_key=st.session_state.api_key,
                 base_url=st.session_state.base_url,
+                model=st.session_state.model,
                 only_n_most_recent_images=st.session_state.only_n_most_recent_images,
             )
 

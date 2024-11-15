@@ -412,7 +412,7 @@ class ComputerTool(BaseAnthropicTool):
                 raise ToolError(f"coordinate is not accepted for {action}")
             
             # 滚动方向和数量
-            scroll_amount = 100 if action == "scroll_up" else -100
+            scroll_amount = 400 if action == "scroll_up" else -400
             logger.debug(f"Scrolling with amount: {scroll_amount}")
             pyautogui.scroll(scroll_amount)
             return await self.take_screenshot()

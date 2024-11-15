@@ -39,11 +39,6 @@ PROMPT_CACHING_BETA_FLAG = "prompt-caching-2024-07-31"
 class APIProvider(StrEnum):
     OPENROUTER = "openrouter"
 
-
-PROVIDER_TO_DEFAULT_MODEL_NAME: dict[APIProvider, str] = {
-    APIProvider.OPENROUTER: "anthropic/claude-3.5-sonnet:beta",  # Plus petit et plus efficace pour le computer use
-}
-
 SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITY>
 * You are utilizing a Windows {platform.machine()} system with internet access.
 * You have access to mouse and keyboard control through PyAutoGUI.
@@ -73,7 +68,6 @@ SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITY>
 
 async def sampling_loop(
     *,
-    model: str,
     provider: APIProvider,
     system_prompt_suffix: str,
     messages: list[BetaMessageParam],
@@ -84,6 +78,7 @@ async def sampling_loop(
     ],
     api_key: str,
     base_url: str,
+    model: str,
     only_n_most_recent_images: int | None = None,
     max_tokens: int = 4096,
 ):
@@ -101,17 +96,15 @@ async def sampling_loop(
     while True:
         enable_prompt_caching = False
         betas = [COMPUTER_USE_BETA_FLAG]
-        image_truncation_threshold = 10
         if provider == APIProvider.OPENROUTER:
             from .openrouter_client import OpenrouterClient
-            client = await (OpenrouterClient(base_url=base_url, api_key=api_key).initialize())  # Initialize asynchronously
+            client = await (OpenrouterClient(base_url=base_url, api_key=api_key, model=model).initialize())  # Initialize asynchronously
             enable_prompt_caching = False
 
         if enable_prompt_caching:
             betas.append(PROMPT_CACHING_BETA_FLAG)
             _inject_prompt_caching(messages)
             # Is it ever worth it to bust the cache with prompt caching?
-            image_truncation_threshold = 50
             system["cache_control"] = {"type": "ephemeral"}
 
         if only_n_most_recent_images:
@@ -128,7 +121,6 @@ async def sampling_loop(
             raw_response, message = await client.beta.messages.create(
                 max_tokens=max_tokens,
                 messages=messages,
-                model=model,
                 system=[system],
                 tools=tool_collection.to_params(),
                 betas=betas,
