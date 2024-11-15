@@ -18,6 +18,7 @@ import pyautogui
 from PIL import Image, ImageDraw
 from anthropic.types.beta import BetaToolComputerUse20241022Param
 from dotenv import load_dotenv
+import pyperclip
 
 from .base import BaseAnthropicTool, ToolError, ToolResult
 
@@ -189,7 +190,7 @@ class IconDetector:
         
         # Filter contours by size and find the closest to target
         best_center = None
-        min_distance = float('inf')
+        min_distance = 5.0 # 仅考虑5px以内的范围
         
         for contour in contours:
             # Get bounding box
@@ -232,7 +233,7 @@ class ComputerTool(BaseAnthropicTool):
     target_width: int
     target_height: int
 
-    _screenshot_delay = 1.0
+    _screenshot_delay = 2.0
     _scaling_enabled = True
 
     @property
@@ -384,7 +385,16 @@ class ComputerTool(BaseAnthropicTool):
                 results = []
                 for chunk in chunks(text, TYPING_GROUP_SIZE):
                     logger.debug(f"Typing chunk: {chunk}")
-                    pyautogui.write(chunk, interval=TYPING_DELAY_MS/1000.0)
+                    if any('\u4e00' <= c <= '\u9fff' for c in chunk):
+                        # Save original clipboard content
+                        original_clipboard = pyperclip.paste()
+                        # Use clipboard for typing Chinese characters
+                        pyperclip.copy(chunk)
+                        pyautogui.hotkey('ctrl', 'v')
+                        # Restore original clipboard content
+                        pyperclip.copy(original_clipboard)
+                    else:
+                        pyautogui.write(chunk, interval=TYPING_DELAY_MS/1000.0)
                     results.append(ToolResult(output=chunk))
                 screenshot = await self.take_screenshot()
                 return ToolResult(

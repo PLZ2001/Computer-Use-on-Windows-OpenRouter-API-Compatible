@@ -71,7 +71,7 @@ def setup_state():
     if "tools" not in st.session_state:
         st.session_state.tools = {}
     if "only_n_most_recent_images" not in st.session_state:
-        st.session_state.only_n_most_recent_images = 10
+        st.session_state.only_n_most_recent_images = 3
     if "custom_system_prompt" not in st.session_state:
         st.session_state.custom_system_prompt = "Speak in Chinese."
     if "hide_images" not in st.session_state:
@@ -93,6 +93,7 @@ async def main():
     st.title("让Claude控制你的电脑")
 
     with st.sidebar:
+
         st.text_area(
             "自定义系统提示",
             key="custom_system_prompt",

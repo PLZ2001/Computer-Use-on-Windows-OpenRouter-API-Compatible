@@ -51,7 +51,7 @@ SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITY>
 * The system maintains exact monitor resolution for perfect accuracy.
 * Screenshots are taken at full monitor resolution and compressed only if needed.
 * The system properly accounts for Windows DPI scaling and taskbar position.
-* When using your computer function calls, they take a while to run and send back to you. Where possible/feasible, try to chain multiple of these calls all into one function calls request.
+* When using your computer function calls, they take a while to run and send back to you. Where possible/feasible, try to call one function call request at a time.
 * The current date is {datetime.today().strftime('%A, %B %d, %Y')}.
 </SYSTEM_CAPABILITY>
 
@@ -115,10 +115,9 @@ async def sampling_loop(
             system["cache_control"] = {"type": "ephemeral"}
 
         if only_n_most_recent_images:
-            _maybe_filter_to_n_most_recent_images(
+            messages = _maybe_filter_to_n_most_recent_images(
                 messages,
                 only_n_most_recent_images,
-                min_removal_threshold=image_truncation_threshold,
             )
 
         # Call the API
@@ -172,50 +171,49 @@ async def sampling_loop(
 def _maybe_filter_to_n_most_recent_images(
     messages: list[BetaMessageParam],
     images_to_keep: int,
-    min_removal_threshold: int,
 ):
     """
-    With the assumption that images are screenshots that are of diminishing value as
-    the conversation progresses, remove all but the final `images_to_keep` tool_result
-    images in place, with a chunk of min_removal_threshold to reduce the amount we
-    break the implicit prompt cache.
+    Filters the messages to keep only the most recent images while preserving other content.
+    Only keeps the specified number of most recent image blocks.
+    
+    Args:
+        messages: List of message parameters containing various content blocks
+        images_to_keep: Number of most recent images to retain
+        
+    Returns:
+        List of filtered messages with only the N most recent images
     """
-    if images_to_keep is None:
+    if images_to_keep is None or images_to_keep <= 0:
         return messages
-
-    tool_result_blocks = cast(
-        list[BetaToolResultBlockParam],
-        [
-            item
-            for message in messages
-            for item in (
-                message["content"] if isinstance(message["content"], list) else []
-            )
-            if isinstance(item, dict) and item.get("type") == "image_url"
-        ],
-    )
-
-    total_images = sum(
-        1
-        for tool_result in tool_result_blocks
-        for content in tool_result.get("content", [])
-        if isinstance(content, dict) and content.get("type") == "image_url"
-    )
-
-    images_to_remove = total_images - images_to_keep
-    # for better cache behavior, we want to remove in chunks
-    images_to_remove -= images_to_remove % min_removal_threshold
-
-    for tool_result in tool_result_blocks:
-        if isinstance(tool_result.get("content"), list):
-            new_content = []
-            for content in tool_result.get("content", []):
+        
+    # Track number of images we've seen from newest to oldest  
+    images_seen = 0
+    
+    # Process messages in reverse order to keep most recent images
+    new_messages = []
+    for message in reversed(messages):
+        new_content = []        
+        if isinstance(message.get("content"), list):
+            for content in message["content"]:
+                # If this is an image block
                 if isinstance(content, dict) and content.get("type") == "image_url":
-                    if images_to_remove > 0:
-                        images_to_remove -= 1
-                        continue
-                new_content.append(content)
-            tool_result["content"] = new_content
+                    if images_seen < images_to_keep:
+                        images_seen += 1
+                        new_content.append(content)
+                else:
+                    new_content.append(content)
+            if new_content:
+                message["content"] = new_content
+                new_messages.append(message)
+            else:
+                new_messages.append({"role": "user", "content": [{
+                    "type": "text",
+                    "text": "ignore this",
+                }]})
+        else:
+            new_messages.append(message)
+    
+    return list(reversed(new_messages))
 
 
 def _response_to_params(
