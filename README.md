@@ -53,4 +53,4 @@
 
 ## 致谢
 
-本项目基于[Anthropic的Computer Use Demo](https://github.com/anthropics/anthropic-quickstarts/tree/main/computer-use-demo)，参考[Cognitive-Creators-AI的AI-on-windows](https://github.com/Cognitive-Creators-AI/Claude-on-windows)和[jessy2027的computer-use](https://github.com/jessy2027/computer-use)，在Windows系统上通过OpenRouter API原生运行，无需Docker容器和Anthropic官方API。原始实现的所有功劳归属于Anthropic。
+本项目基于[Anthropic的Computer Use Demo](https://github.com/anthropics/anthropic-quickstarts/tree/main/computer-use-demo)，参考[Cognitive Creators AI的Claude on Windows](https://github.com/Cognitive-Creators-AI/Claude-on-windows)和[jessy2027的Computer Use](https://github.com/jessy2027/computer-use)，在Windows系统上通过OpenRouter API原生运行，无需Docker容器和Anthropic官方API。原始实现的所有功劳归属于Anthropic。
