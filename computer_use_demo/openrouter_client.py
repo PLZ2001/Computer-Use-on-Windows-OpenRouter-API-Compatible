@@ -131,6 +131,8 @@ class OpenrouterClient:
                                             "double_click",
                                             "screenshot",
                                             "cursor_position",
+                                            "scroll_up",
+                                            "scroll_down",
                                         ],
                                         "description": "'action' is the action performed on the screen."
                                     },

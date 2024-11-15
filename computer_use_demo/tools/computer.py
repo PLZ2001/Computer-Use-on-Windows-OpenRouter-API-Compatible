@@ -60,6 +60,8 @@ Action = Literal[
     "double_click",
     "screenshot",
     "cursor_position",
+    "scroll_up",
+    "scroll_down",
 ]
 
 class Resolution(TypedDict):
@@ -402,6 +404,18 @@ class ComputerTool(BaseAnthropicTool):
                     error="".join(result.error or "" for result in results),
                     base64_image=screenshot.base64_image,
                 )
+
+        if action in ("scroll_up", "scroll_down"):
+            if text is not None:
+                raise ToolError(f"text is not accepted for {action}")
+            if coordinate is not None:
+                raise ToolError(f"coordinate is not accepted for {action}")
+            
+            # 滚动方向和数量
+            scroll_amount = 100 if action == "scroll_up" else -100
+            logger.debug(f"Scrolling with amount: {scroll_amount}")
+            pyautogui.scroll(scroll_amount)
+            return await self.take_screenshot()
 
         if action in (
             "left_click",
