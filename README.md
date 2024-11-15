@@ -23,11 +23,10 @@
 5. 在`.env`文件中配置您的OpenRouter基础URL、OpenRouter API密钥和OpenRouter模型名称
 6. 运行应用程序：`python -m streamlit run run.py --browser.gatherUsageStats false --client.toolbarMode "viewer" --global.storeCachedForwardMessagesInMemory false --global.developmentMode false`
 
-## 已测试模型
+## 模型选择
 
-1. anthropic/claude-3.5-sonnet:beta
-2. openai/gpt-4o-mini
-3. google/gemini-flash-1.5
+1. 推荐：`anthropic/claude-3.5-sonnet:beta`
+2. 能用，但不推荐：`openai/gpt-4o-mini`、`google/gemini-flash-1.5`
 
 ## 使用说明
 
