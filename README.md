@@ -20,10 +20,11 @@
 2. 创建虚拟环境：`conda create --name computer_use_demo_env python=3.11`
 3. 激活虚拟环境：`conda activate computer_use_demo_env`
 4. 安装依赖：`pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple`
-5. 在`.env`文件中配置您的OpenRouter基础URL、OpenRouter API密钥和OpenRouter模型名称
+5. 在`.env`文件中配置您的OpenRouter URL、OpenRouter API密钥和OpenRouter模型名称
 
 ## 运行应用程序
-`conda run -n computer_use_demo_env python -m streamlit run run.py --browser.gatherUsageStats false --client.toolbarMode "viewer" --global.storeCachedForwardMessagesInMemory false --global.developmentMode false`
+1. 点击`start.bat`启动应用程序
+2. 启动应用程序后，浏览器自动打开 http://localhost:8501
 
 ## 已测试模型
 
