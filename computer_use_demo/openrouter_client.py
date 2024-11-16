@@ -92,13 +92,11 @@ class OpenrouterClient:
                 
                 if not self.client.model:
                     raise ValueError("Model name is required")
-                
-                system_prompt = system[0].get("text", "") if system else ""
-                
+                                
                 # Convert messages to Openrouter format
                 openrouter_messages = [{
                     "role": "system",
-                    "content": system_prompt
+                    "content": system
                 }]
                 
                 for msg in messages:
@@ -138,7 +136,7 @@ class OpenrouterClient:
                                     },
                                     "text": {
                                         "type": "string",
-                                        "description": "'text' is required for action of 'key' or 'type'."
+                                        "description": "'text' is required for action of 'key' or 'type'. When you want to use the Windows key, please use the 'win' string."
                                     },
                                     "coordinate": {
                                         "type": "array",
@@ -147,7 +145,7 @@ class OpenrouterClient:
                                             { "type": "number" },
                                         ],
                                         "items": { "type": "number" },
-                                        "description": "'coordinate' is required for action of 'mouse_move' or 'left_click_drag'"
+                                        "description": "'coordinate' is required for actions of mouse moving, clicking or dragging."
                                     }
                                 },
                                 "required": [
