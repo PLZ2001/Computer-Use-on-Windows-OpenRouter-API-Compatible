@@ -59,8 +59,6 @@ class OpenrouterClient:
                 max_tokens: int,
                 messages: list[dict],
                 system: list[dict],
-                tools: list[dict],
-                betas: list[str],
             ) -> OpenrouterResponse:
                 """
                 Create a chat completion with Openrouter API.
@@ -112,7 +110,7 @@ class OpenrouterClient:
                         "type": "function",
                         "function": {
                             "name": "computer",
-                            "description": "A tool that allows the agent to interact with the screen, keyboard, and mouse using PyAutoGUI. Uses smart icon detection for better clicking accuracy.",
+                            "description": "A tool that allows you to interact with the screen, keyboard, and mouse. Where possible/feasible, try to use 'bash' tool instead of the 'computer' tool for better results.",
                             "parameters": {
                                 "type": "object",
                                 "properties": {
@@ -132,11 +130,11 @@ class OpenrouterClient:
                                             "scroll_up",
                                             "scroll_down",
                                         ],
-                                        "description": "'action' is the action performed on the screen."
+                                        "description": "'action' is the action performed on the screen. When searching for targets on the screen, try to interact with the screen with 'scroll_up' or 'scroll_down' to explore the unseen space."
                                     },
                                     "text": {
                                         "type": "string",
-                                        "description": "'text' is required for action of 'key' or 'type'. When you want to use the Windows key, please use the 'win' string."
+                                        "description": "'text' is required for action of 'key' or 'type'. When you want to use the Windows key, please use the 'win' string. "
                                     },
                                     "coordinate": {
                                         "type": "array",
@@ -151,6 +149,25 @@ class OpenrouterClient:
                                 "required": [
                                     "action"
                                 ]
+                            }
+                        }
+                    },{
+                        "type": "function",
+                        "function": {
+                            "name": "bash",
+                            "description": "A tool for executing shell commands. Where possible/feasible, try to use 'bash' tool instead of the 'computer' tool for better results.",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "command": {
+                                        "type": "string",
+                                        "description": "'command' is the command to be executed."
+                                    },
+                                    "restart": {
+                                        "type": "boolean",
+                                        "description": "set 'restart' true to restart the tool after execution. Default value: false. "
+                                    }
+                                }
                             }
                         }
                     }],

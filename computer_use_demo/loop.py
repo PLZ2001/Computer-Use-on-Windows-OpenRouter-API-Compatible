@@ -30,7 +30,7 @@ from anthropic.types.beta import (
     BetaToolUseBlockParam,
 )
 
-from .tools import ComputerTool, ToolCollection, ToolResult
+from .tools import ComputerTool, CommandTool, ToolCollection, ToolResult
 
 COMPUTER_USE_BETA_FLAG = "computer-use-2024-10-22"
 PROMPT_CACHING_BETA_FLAG = "prompt-caching-2024-07-31"
@@ -86,7 +86,8 @@ async def sampling_loop(
     Agentic sampling loop for the assistant/tool interaction of computer use.
     """
     tool_collection = ToolCollection(
-        ComputerTool()
+        ComputerTool(),
+        CommandTool(),
     )
     system = BetaTextBlockParam(
         type="text",
@@ -122,8 +123,6 @@ async def sampling_loop(
                 max_tokens=max_tokens,
                 messages=messages,
                 system=[system],
-                tools=tool_collection.to_params(),
-                betas=betas,
             )
         except (APIStatusError, APIResponseValidationError) as e:
             api_response_callback(e.request, e.response, e)
@@ -149,7 +148,7 @@ async def sampling_loop(
                     tool_input=cast(dict[str, Any], content_block["input"]),
                 )
                 tool_result_content.append(
-                    _make_api_tool_result(result, content_block["id"])
+                    _make_api_tool_result(result, content_block["name"], content_block["id"])
                 )
                 tool_output_callback(result, content_block["id"])
 
@@ -157,7 +156,7 @@ async def sampling_loop(
             return messages
         
         for item in tool_result_content:
-            messages.append({"role": "tool", "name": "computer", "tool_call_id": item["tool_use_id"], "content": json.dumps([item["tool_result"]])})
+            messages.append({"role": "tool", "name": item["name"], "tool_call_id": item["tool_use_id"], "content": json.dumps([item["tool_result"]])})
         messages.append({"role": "user", "content": tool_result_content[-1]["content"]})
 
 
@@ -198,11 +197,6 @@ def _maybe_filter_to_n_most_recent_images(
             if new_content:
                 message["content"] = new_content
                 new_messages.append(message)
-            else:
-                new_messages.append({"role": "user", "content": [{
-                    "type": "text",
-                    "text": "ignore this",
-                }]})
         else:
             new_messages.append(message)
     
@@ -245,7 +239,7 @@ def _inject_prompt_caching(
                 break
 
 def _make_api_tool_result(
-    result: ToolResult, tool_use_id: str
+    result: ToolResult, tool_name: str, tool_use_id: str
 ) -> BetaToolResultBlockParam:
     """Convert an agent ToolResult to an API ToolResultBlockParam."""
     tool_result_content: list[BetaTextBlockParam | BetaImageBlockParam] | str = []
@@ -277,6 +271,7 @@ def _make_api_tool_result(
             "is_error": is_error,
         },
         "content": tool_result_content,
+        "name": tool_name,
         "tool_use_id": tool_use_id,
     }
 

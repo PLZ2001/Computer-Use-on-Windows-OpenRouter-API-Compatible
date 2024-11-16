@@ -387,16 +387,13 @@ class ComputerTool(BaseAnthropicTool):
                 results = []
                 for chunk in chunks(text, TYPING_GROUP_SIZE):
                     logger.debug(f"Typing chunk: {chunk}")
-                    if any('\u4e00' <= c <= '\u9fff' for c in chunk):
-                        # Save original clipboard content
-                        original_clipboard = pyperclip.paste()
-                        # Use clipboard for typing Chinese characters
-                        pyperclip.copy(chunk)
-                        pyautogui.hotkey('ctrl', 'v')
-                        # Restore original clipboard content
-                        pyperclip.copy(original_clipboard)
-                    else:
-                        pyautogui.write(chunk, interval=TYPING_DELAY_MS/1000.0)
+                    # Save original clipboard content
+                    original_clipboard = pyperclip.paste()
+                    # Use clipboard for typing Chinese characters
+                    pyperclip.copy(chunk)
+                    pyautogui.hotkey('ctrl', 'v')
+                    # Restore original clipboard content
+                    pyperclip.copy(original_clipboard)
                     results.append(ToolResult(output=chunk))
                 screenshot = await self.take_screenshot()
                 return ToolResult(

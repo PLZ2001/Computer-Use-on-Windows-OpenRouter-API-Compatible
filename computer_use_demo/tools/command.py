@@ -3,7 +3,8 @@
 import asyncio
 import logging
 import os
-import shlex
+import subprocess
+import concurrent.futures
 from typing import Any, Literal
 
 from .base import BaseAnthropicTool, CLIResult, ToolError, ToolResult
@@ -34,54 +35,50 @@ class CommandTool(BaseAnthropicTool):
             return ToolResult(error="No command provided")
 
         try:
-            # Use cmd.exe on Windows
-            if os.name == 'nt':
-                process = await asyncio.create_subprocess_shell(
-                    command,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    shell=True
-                )
-            else:
-                # Use bash on Unix
-                process = await asyncio.create_subprocess_exec(
-                    'bash',
-                    '-c',
-                    command,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+            logger.info(f"Executing command: {command}")
+            
+            # 使用线程池执行同步的subprocess调用
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                if os.name == 'nt':
+                    # Windows: 使用cmd.exe执行命令
+                    full_command = f'cmd /c {command}'
+                else:
+                    # Unix: 使用bash执行命令
+                    full_command = command
+
+                # 在线程池中执行同步的subprocess.run
+                process_result = await loop.run_in_executor(
+                    pool,
+                    lambda: subprocess.run(
+                        full_command,
+                        shell=True,
+                        capture_output=True,
+                        text=True,
+                        encoding='utf-8',
+                        errors='ignore'
+                    )
                 )
 
-            stdout, stderr = await process.communicate()
+            stdout_str = process_result.stdout
+            stderr_str = process_result.stderr
             
-            # Decode output using UTF-8, ignoring errors
-            stdout_str = stdout.decode('utf-8', errors='ignore') if stdout else ''
-            stderr_str = stderr.decode('utf-8', errors='ignore') if stderr else ''
+            logger.debug(f"Command output - stdout: {stdout_str}, stderr: {stderr_str}")
             
             result = CLIResult(
-                returncode=process.returncode,
+                returncode=process_result.returncode,
                 stdout=stdout_str,
                 stderr=stderr_str
             )
 
             if result.returncode != 0:
-                return ToolResult(
-                    error=f"Command failed with code {result.returncode}\n{result.stderr}"
-                )
+                error_msg = f"Command failed with code {result.returncode}\n{result.stderr}"
+                logger.error(error_msg)
+                return ToolResult(error=error_msg)
 
             return ToolResult(output=result.stdout, error=result.stderr)
 
         except Exception as e:
-            logger.error(f"Command execution failed: {e}")
-            return ToolResult(error=f"Command execution failed: {e}")
-
-    def _escape_command(self, command: str) -> str:
-        """Escape a command for shell execution."""
-        if os.name == 'nt':
-            # Windows: wrap in quotes if contains spaces
-            if ' ' in command:
-                return f'"{command}"'
-            return command
-        else:
-            # Unix: use shlex
-            return shlex.quote(command)
+            error_msg = f"Command execution failed: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            return ToolResult(error=error_msg)
