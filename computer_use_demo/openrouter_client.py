@@ -197,12 +197,12 @@ class OpenrouterClient:
                 if openrouter_response['choices'][0]["message"]["content"] is not None:
                     content.append({"type": "text", "text": openrouter_response['choices'][0]["message"]["content"]})
                 if 'tool_calls' in openrouter_response['choices'][0]['message'].keys():
-                    content.append({"type": "tool_use", 
-                                    "name": openrouter_response['choices'][0]['message']['tool_calls'][0]['function']['name'],
-                                    "input": json.loads(openrouter_response['choices'][0]['message']['tool_calls'][0]['function']['arguments']),
-                                    'id': openrouter_response['choices'][0]['message']['tool_calls'][0]['id']
-                    })
-                    openrouter_response['choices'][0]['message']['tool_calls'] = [openrouter_response['choices'][0]['message']['tool_calls'][0]]
+                    for item in openrouter_response['choices'][0]['message']['tool_calls']:
+                        content.append({"type": "tool_use", 
+                                        "name": item['function']['name'],
+                                        "input": json.loads(item['function']['arguments']),
+                                        'id': item['id']
+                        })
                 # Create BetaMessage response
                 beta_message = BetaMessage(
                     id="msg_" + http_response.headers.get("X-Request-ID", "unknown"),

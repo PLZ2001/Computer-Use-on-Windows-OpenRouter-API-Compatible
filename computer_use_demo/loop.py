@@ -46,7 +46,7 @@ SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITY>
 * The system maintains exact monitor resolution for perfect accuracy.
 * Screenshots are taken at full monitor resolution and compressed only if needed.
 * The system properly accounts for Windows DPI scaling and taskbar position.
-* When using your computer function calls, they take a while to run and send back to you. Where possible/feasible, try to call one function call request at a time.
+* When using your computer function calls, they take a while to run and send back to you. Where possible/feasible, try to call multple functions at a time.
 * The current date is {datetime.today().strftime('%A, %B %d, %Y')}.
 </SYSTEM_CAPABILITY>
 
@@ -155,9 +155,10 @@ async def sampling_loop(
 
         if not tool_result_content:
             return messages
-
-        messages.append({"role": "tool", "name": "computer", "tool_call_id": tool_result_content[0]["tool_use_id"], "content": json.dumps([tool_result_content[0]["tool_result"]])})
-        messages.append({"role": "user", "content": tool_result_content[0]["content"]})
+        
+        for item in tool_result_content:
+            messages.append({"role": "tool", "name": "computer", "tool_call_id": item["tool_use_id"], "content": json.dumps([item["tool_result"]])})
+        messages.append({"role": "user", "content": tool_result_content[-1]["content"]})
 
 
 def _maybe_filter_to_n_most_recent_images(

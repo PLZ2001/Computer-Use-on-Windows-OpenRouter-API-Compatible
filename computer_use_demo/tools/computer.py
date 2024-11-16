@@ -235,7 +235,7 @@ class ComputerTool(BaseAnthropicTool):
     target_width: int
     target_height: int
 
-    _screenshot_delay = 2.0
+    _screenshot_delay = 1.5
     _scaling_enabled = True
 
     @property
