@@ -3,6 +3,7 @@
 from .base import BaseAnthropicTool, CLIResult, ToolError, ToolResult, ToolCollection
 from .computer import ComputerTool
 from .command import CommandTool
+from .edit import EditTool
 
 __all__ = [
     'BaseAnthropicTool',
@@ -11,5 +12,6 @@ __all__ = [
     'ToolResult',
     'ToolCollection',
     'ComputerTool',
-    'CommandTool'
+    'CommandTool',
+    'EditTool'
 ]

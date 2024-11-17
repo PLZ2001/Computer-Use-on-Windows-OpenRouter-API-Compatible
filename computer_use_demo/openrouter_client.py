@@ -170,6 +170,50 @@ class OpenrouterClient:
                                 }
                             }
                         }
+                    },{
+                        "type": "function",
+                        "function": {
+                            "name": "str_replace_editor",
+                            "description": "A powerful file editing tool that supports viewing, creating, editing, and managing file content with history tracking.",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "command": {
+                                        "type": "string",
+                                        "enum": ["view", "create", "str_replace", "insert", "undo_edit"],
+                                        "description": "The editing command to perform: view (show file content), create (create new file), str_replace (replace text), insert (insert at line), undo_edit (revert last change)"
+                                    },
+                                    "path": {
+                                        "type": "string",
+                                        "description": "The absolute path of the file to operate on"
+                                    },
+                                    "file_text": {
+                                        "type": "string",
+                                        "description": "Required for 'create' command. The content to write to the new file."
+                                    },
+                                    "view_range": {
+                                        "type": "array",
+                                        "items": {"type": "integer"},
+                                        "minItems": 2,
+                                        "maxItems": 2,
+                                        "description": "Optional for 'view' command. Specify start and end line numbers to view [start, end]. Use -1 for end to view until the last line."
+                                    },
+                                    "old_str": {
+                                        "type": "string",
+                                        "description": "Required for 'str_replace' command. The string to be replaced."
+                                    },
+                                    "new_str": {
+                                        "type": "string",
+                                        "description": "Required for 'str_replace' and 'insert' commands. The new string to insert or replace with."
+                                    },
+                                    "insert_line": {
+                                        "type": "integer",
+                                        "description": "Required for 'insert' command. The line number where the new content should be inserted."
+                                    }
+                                },
+                                "required": ["command", "path"]
+                            }
+                        }
                     }],
                 }
                 try:

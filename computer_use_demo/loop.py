@@ -30,7 +30,7 @@ from anthropic.types.beta import (
     BetaToolUseBlockParam,
 )
 
-from .tools import ComputerTool, CommandTool, ToolCollection, ToolResult
+from .tools import ComputerTool, CommandTool, EditTool, ToolCollection, ToolResult
 
 COMPUTER_USE_BETA_FLAG = "computer-use-2024-10-22"
 PROMPT_CACHING_BETA_FLAG = "prompt-caching-2024-07-31"
@@ -94,6 +94,7 @@ async def sampling_loop(
     tool_collection = ToolCollection(
         ComputerTool(),
         CommandTool(),
+        EditTool(),
     )
     system = BetaTextBlockParam(
         type="text",
