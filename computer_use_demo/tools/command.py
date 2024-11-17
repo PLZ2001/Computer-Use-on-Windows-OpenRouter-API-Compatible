@@ -8,6 +8,7 @@ import concurrent.futures
 from typing import Any, Literal
 
 from .base import BaseAnthropicTool, CLIResult, ToolError, ToolResult
+from .computer import ComputerTool
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,10 @@ class CommandTool(BaseAnthropicTool):
     name: Literal["bash"] = "bash"
     api_type: Literal["bash_20241022"] = "bash_20241022"
 
+    def __init__(self):
+        super().__init__()
+        self.computer = ComputerTool()
+
     def to_params(self) -> dict[str, Any]:
         return {"name": self.name, "type": self.api_type}
 
@@ -24,13 +29,9 @@ class CommandTool(BaseAnthropicTool):
         self,
         *,
         command: str | None = None,
-        restart: bool | None = None,
         **kwargs,
     ) -> ToolResult:
         """Execute a shell command."""
-        if restart:
-            return ToolResult(output="Tool restarted")
-
         if not command:
             return ToolResult(error="No command provided")
 
@@ -76,7 +77,11 @@ class CommandTool(BaseAnthropicTool):
                 logger.error(error_msg)
                 return ToolResult(error=error_msg)
 
-            return ToolResult(output=result.stdout)
+            # 如果没有stdout输出，返回截图
+            if not stdout_str.strip():
+                return await self.computer.take_screenshot()
+
+            return ToolResult(output=stdout_str)
 
         except Exception as e:
             error_msg = f"Command execution failed: {str(e)}"
