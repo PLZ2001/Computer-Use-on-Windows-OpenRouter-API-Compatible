@@ -51,7 +51,7 @@ SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITIES>
 
 * Tool Usage Best Practices:
   - Use 'bash' over 'computer' when possible
-  - Batch operations for efficiency
+  - Where possible/feasible, try to call multiple functions/tools at a time for efficiency
   - Take screenshots when visual context needed
   - Consider command execution delays
 
