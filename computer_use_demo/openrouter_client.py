@@ -144,6 +144,16 @@ class OpenrouterClient:
                                         ],
                                         "items": { "type": "number" },
                                         "description": "Required for mouse-related actions. Specifies the x,y coordinates on screen for mouse movement, clicking, or dragging operations."
+                                    },
+                                    "scroll_amount": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "description": "Optional for scroll_up and scroll_down actions. Specifies the amount to scroll. Must be a positive integer. Default is 400. The direction is determined by the action type (scroll_up or scroll_down)."
+                                    },
+                                    "repeat": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "description": "Optional for all actions. Specifies how many times to repeat the action. Default is 1. For example, can be used to repeat key presses, mouse clicks, scrolling, or any other action multiple times."
                                     }
                                 },
                                 "required": [

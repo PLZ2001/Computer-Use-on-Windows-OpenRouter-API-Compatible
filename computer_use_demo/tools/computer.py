@@ -9,7 +9,7 @@ import ctypes
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Literal, TypedDict, Optional, Tuple
+from typing import Literal, TypedDict, Optional, Tuple, Union
 from uuid import uuid4
 
 import cv2
@@ -308,7 +308,7 @@ class ComputerTool(BaseAnthropicTool):
         else:
             return self.translator.screen_to_api(x, y)
 
-    async def smart_click(self, x: int, y: int, action: str) -> None:
+    async def smart_click(self, x: int, y: int, action: str, repeat: int = 1) -> None:
         """Perform a smart click by finding icon center."""
         # Take quick screenshot for icon detection
         screenshot = pyautogui.screenshot()
@@ -328,14 +328,16 @@ class ComputerTool(BaseAnthropicTool):
         # Move to position
         pyautogui.moveTo(click_x, click_y)
         
-        # Perform click action
+        # Perform click action with repeat
         click_map = {
             "left_click": lambda: pyautogui.click(button='left'),
             "right_click": lambda: pyautogui.click(button='right'),
             "middle_click": lambda: pyautogui.click(button='middle'),
             "double_click": lambda: pyautogui.doubleClick(),
         }
-        click_map[action]()
+        
+        for _ in range(repeat):
+            click_map[action]()
 
     async def __call__(
         self,
@@ -343,8 +345,13 @@ class ComputerTool(BaseAnthropicTool):
         action: Action,
         text: str | None = None,
         coordinate: tuple[int, int] | None = None,
+        scroll_amount: int | None = None,
+        repeat: int | None = None,
         **kwargs,
     ) -> ToolResult:
+        # 设置默认repeat值为1
+        repeat_times = max(1, repeat or 1)
+        
         if action in ("mouse_move", "left_click_drag"):
             if coordinate is None:
                 raise ToolError(f"coordinate is required for {action}")
@@ -359,12 +366,13 @@ class ComputerTool(BaseAnthropicTool):
             x, y = self.scale_coordinates(ScalingSource.API, coordinate[0], coordinate[1])
             logger.debug(f"Moving to coordinates: ({x}, {y})")
 
-            if action == "mouse_move":
-                pyautogui.moveTo(x, y)
-                return await self.take_screenshot()
-            elif action == "left_click_drag":
-                pyautogui.dragTo(x, y, button='left')
-                return await self.take_screenshot()
+            for _ in range(repeat_times):
+                if action == "mouse_move":
+                    pyautogui.moveTo(x, y)
+                elif action == "left_click_drag":
+                    pyautogui.dragTo(x, y, button='left')
+            
+            return await self.take_screenshot()
 
         if action in ("key", "type"):
             if text is None:
@@ -376,25 +384,29 @@ class ComputerTool(BaseAnthropicTool):
 
             if action == "key":
                 key_parts = text.split('+')
-                if len(key_parts) > 1:
-                    logger.debug(f"Pressing key combination: {key_parts}")
-                    pyautogui.hotkey(*key_parts)
-                else:
-                    logger.debug(f"Pressing key: {text}")
-                    pyautogui.press(text)
+                logger.debug(f"Repeating key press {repeat_times} times")
+                
+                for _ in range(repeat_times):
+                    if len(key_parts) > 1:
+                        logger.debug(f"Pressing key combination: {key_parts}")
+                        pyautogui.hotkey(*key_parts)
+                    else:
+                        logger.debug(f"Pressing key: {text}")
+                        pyautogui.press(text)
                 return await self.take_screenshot()
             elif action == "type":
                 results = []
-                for chunk in chunks(text, TYPING_GROUP_SIZE):
-                    logger.debug(f"Typing chunk: {chunk}")
-                    # Save original clipboard content
-                    original_clipboard = pyperclip.paste()
-                    # Use clipboard for typing Chinese characters
-                    pyperclip.copy(chunk)
-                    pyautogui.hotkey('ctrl', 'v')
-                    # Restore original clipboard content
-                    pyperclip.copy(original_clipboard)
-                    results.append(ToolResult(output=chunk))
+                for _ in range(repeat_times):
+                    for chunk in chunks(text, TYPING_GROUP_SIZE):
+                        logger.debug(f"Typing chunk: {chunk}")
+                        # Save original clipboard content
+                        original_clipboard = pyperclip.paste()
+                        # Use clipboard for typing Chinese characters
+                        pyperclip.copy(chunk)
+                        pyautogui.hotkey('ctrl', 'v')
+                        # Restore original clipboard content
+                        pyperclip.copy(original_clipboard)
+                        results.append(ToolResult(output=chunk))
                 screenshot = await self.take_screenshot()
                 return ToolResult(
                     output="".join(result.output or "" for result in results),
@@ -408,10 +420,18 @@ class ComputerTool(BaseAnthropicTool):
             if coordinate is not None:
                 raise ToolError(f"coordinate is not accepted for {action}")
             
-            # 滚动方向和数量
-            scroll_amount = 400 if action == "scroll_up" else -400
-            logger.debug(f"Scrolling with amount: {scroll_amount}")
-            pyautogui.scroll(scroll_amount)
+            # 使用提供的滚动量或默认值
+            default_amount = 400
+            actual_amount = abs(scroll_amount if scroll_amount is not None else default_amount)
+            
+            # 根据动作方向决定滚动方向
+            if action == "scroll_down":
+                actual_amount = -actual_amount
+            
+            for _ in range(repeat_times):
+                logger.debug(f"Scrolling with amount: {actual_amount}")
+                pyautogui.scroll(actual_amount)
+            
             return await self.take_screenshot()
 
         if action in (
@@ -433,18 +453,19 @@ class ComputerTool(BaseAnthropicTool):
                 return ToolResult(output=f"X={api_x},Y={api_y}")
             else:
                 if coordinate is not None:
-                    # Scale coordinates and use smart click
+                    # Scale coordinates and use smart click with repeat
                     x, y = self.scale_coordinates(ScalingSource.API, coordinate[0], coordinate[1])
-                    await self.smart_click(x, y, action)
+                    await self.smart_click(x, y, action, repeat_times)
                 else:
-                    # Click at current position
+                    # Click at current position with repeat
                     click_map = {
                         "left_click": lambda: pyautogui.click(button='left'),
                         "right_click": lambda: pyautogui.click(button='right'),
                         "middle_click": lambda: pyautogui.click(button='middle'),
                         "double_click": lambda: pyautogui.doubleClick(),
                     }
-                    click_map[action]()
+                    for _ in range(repeat_times):
+                        click_map[action]()
                 
                 return await self.take_screenshot()
 
