@@ -134,7 +134,7 @@ class OpenrouterClient:
                                     },
                                     "text": {
                                         "type": "string",
-                                        "description": "Required for keyboard input actions ('key' or 'type'). For Windows key commands, use 'win' as the text value."
+                                        "description": "Required for keyboard input actions ('key' or 'type'). For Windows key, use 'win'."
                                     },
                                     "coordinate": {
                                         "type": "array",
