@@ -165,17 +165,17 @@ class OpenrouterClient:
                         "type": "function",
                         "function": {
                             "name": "bash",
-                            "description": "A powerful tool for executing shell commands in the system environment. Supports command execution with optional restart capability.",
+                            "description": "A Windows command execution tool that maintains a persistent cmd.exe session. Supports command execution with automatic timeout control and screenshot capability for commands without output.",
                             "parameters": {
                                 "type": "object",
                                 "properties": {
                                     "command": {
                                         "type": "string",
-                                        "description": "The shell command to be executed in the system environment."
+                                        "description": "The Windows command to execute in the persistent cmd.exe session. Commands timeout after 120 seconds."
                                     },
                                     "restart": {
                                         "type": "boolean",
-                                        "description": "Optional parameter to restart the tool after command execution. Defaults to false if not specified."
+                                        "description": "Optional parameter to restart the cmd.exe session. Use this if the session becomes unresponsive or times out."
                                     }
                                 }
                             }

@@ -39,8 +39,8 @@ TYPING_GROUP_SIZE = 50
 # Configure screenshot directory
 OUTPUT_DIR = os.path.join(os.getenv('TEMP', '.'), 'outputs')
 
-# Maximum image size (5MB)
-MAX_IMAGE_SIZE = 5 * 1024 * 1024
+# Maximum image size (1MB)
+MAX_IMAGE_SIZE = 1 * 1024 * 1024
 
 # Standard resolutions for scaling (from original repo)
 MAX_SCALING_TARGETS: dict[str, dict[str, int]] = {
@@ -485,36 +485,45 @@ class ComputerTool(BaseAnthropicTool):
         
         scaled = screenshot.resize((scaled_width, scaled_height), Image.Resampling.LANCZOS)
         
-        # Try PNG compression
-        img_buffer = io.BytesIO()
-        scaled.save(
-            img_buffer,
-            format='PNG',
-            optimize=True,
-            compress_level=9
-        )
+        # 尝试不同的JPEG压缩级别，从高质量到低质量
+        compression_levels = [
+            # 1. 高质量JPEG
+            lambda: self._save_jpeg(scaled, quality=85),
+            # 2. 中等质量JPEG
+            lambda: self._save_jpeg(scaled, quality=60),
+            # 3. 转换为灰度 + 中等质量JPEG
+            lambda: self._save_jpeg(scaled.convert('L'), quality=60),
+            # 4. 降低分辨率 + 中等质量JPEG
+            lambda: self._save_jpeg(scaled.resize(
+                (scaled_width//2, scaled_height//2), 
+                Image.Resampling.LANCZOS
+            ), quality=60),
+            # 5. 最低质量JPEG（紧急情况）
+            lambda: self._save_jpeg(scaled.resize(
+                (scaled_width//2, scaled_height//2), 
+                Image.Resampling.LANCZOS
+            ), quality=30),
+        ]
         
-        img_buffer.seek(0)
-        size = len(img_buffer.getvalue())
-        logger.debug(f"Size after scaling: {size/1024/1024:.1f}MB")
+        # 尝试每个压缩级别直到文件大小小于MAX_IMAGE_SIZE
+        for compress_method in compression_levels:
+            img_buffer = compress_method()
+            size = len(img_buffer.getvalue())
+            logger.debug(f"Compression level result size: {size/1024/1024:.1f}MB")
+            
+            if size <= MAX_IMAGE_SIZE:
+                return ToolResult(base64_image=base64.b64encode(img_buffer.getvalue()).decode())
         
-        if size <= MAX_IMAGE_SIZE:
-            return ToolResult(base64_image=base64.b64encode(img_buffer.getvalue()).decode())
-        
-        # If still too large, convert to grayscale
-        logger.debug("Converting to grayscale")
-        grayscale = scaled.convert('L')
-        
-        img_buffer = io.BytesIO()
-        grayscale.save(
-            img_buffer,
-            format='PNG',
-            optimize=True,
-            compress_level=9
-        )
-        
-        img_buffer.seek(0)
-        size = len(img_buffer.getvalue())
-        logger.debug(f"Size after grayscale: {size/1024/1024:.1f}MB")
-        
+        # 如果所有压缩方法都无法达到目标大小，使用最后一个结果
+        img_buffer = compression_levels[-1]()
         return ToolResult(base64_image=base64.b64encode(img_buffer.getvalue()).decode())
+    
+    def _save_jpeg(self, image: Image.Image, quality: int = 85) -> io.BytesIO:
+        """Save image as JPEG with specified quality."""
+        img_buffer = io.BytesIO()
+        # 转换为RGB（如果需要）
+        if image.mode == 'RGBA':
+            image = image.convert('RGB')
+        image.save(img_buffer, format='JPEG', quality=quality, optimize=True)
+        img_buffer.seek(0)
+        return img_buffer

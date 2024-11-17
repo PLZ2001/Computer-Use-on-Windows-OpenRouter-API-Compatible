@@ -267,7 +267,7 @@ def _make_api_tool_result(
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": f"data:image/png;base64,{result.base64_image}",
+                        "url": f"data:image/jpeg;base64,{result.base64_image}",
                     },
                 }
             )
