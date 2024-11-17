@@ -55,12 +55,13 @@ SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITIES>
   - Take screenshots whenever context is unclear
   - Consider functions/tools execution delays
   - Examine screenshots carefully to validate results of functions/tools execution
+  - Any functions/tools execution should be additive rather than overwriting existing content
+  - Where possible/feasible, try to access full screen content via scrolling up or down
 
 * Display & Coordinates:
   - Native monitor resolution preserved
   - Accurate DPI scaling and coordinate mapping
   - Windows taskbar position handled
-  - Full screen content accessibility via scrolling
   - Screenshots at native resolution (compressed if needed)
   - Zooming available for full page visibility
 
