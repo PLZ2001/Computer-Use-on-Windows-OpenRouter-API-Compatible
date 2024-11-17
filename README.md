@@ -1,4 +1,4 @@
-# computer-use-demo-on-windows-using-openrouter-api
+# Computer Use on Windows (OpenRouter API Compatible)
 
 这是[Anthropic的Computer Use Demo](https://github.com/anthropics/anthropic-quickstarts/tree/main/computer-use-demo)的Windows兼容版本，经过修改可以在Windows系统上通过OpenRouter API原生运行，无需Docker容器和Anthropic官方API。
 
