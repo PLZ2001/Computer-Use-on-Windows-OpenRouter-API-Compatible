@@ -76,7 +76,7 @@ class CommandTool(BaseAnthropicTool):
                 logger.error(error_msg)
                 return ToolResult(error=error_msg)
 
-            return ToolResult(output=result.stdout, error=result.stderr)
+            return ToolResult(output=result.stdout)
 
         except Exception as e:
             error_msg = f"Command execution failed: {str(e)}"

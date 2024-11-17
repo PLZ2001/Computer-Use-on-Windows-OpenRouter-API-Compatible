@@ -110,7 +110,7 @@ class OpenrouterClient:
                         "type": "function",
                         "function": {
                             "name": "computer",
-                            "description": "A tool that allows you to interact with the screen, keyboard, and mouse. Where possible/feasible, try to use 'bash' tool instead of the 'computer' tool for better results.",
+                            "description": "A comprehensive tool that enables interaction with computer input/output devices including screen, keyboard, and mouse. It supports various operations like typing, clicking, scrolling and taking screenshots.",
                             "parameters": {
                                 "type": "object",
                                 "properties": {
@@ -130,11 +130,11 @@ class OpenrouterClient:
                                             "scroll_up",
                                             "scroll_down",
                                         ],
-                                        "description": "'action' is the action performed on the screen. When searching for targets on the screen, try to interact with the screen with 'scroll_up' or 'scroll_down' to explore the unseen space."
+                                        "description": "Specifies the type of action to perform on the computer. Each action corresponds to a specific interaction with the input/output devices."
                                     },
                                     "text": {
                                         "type": "string",
-                                        "description": "'text' is required for action of 'key' or 'type'. When you want to use the Windows key, please use the 'win' string. "
+                                        "description": "Required for keyboard input actions ('key' or 'type'). For Windows key commands, use 'win' as the text value."
                                     },
                                     "coordinate": {
                                         "type": "array",
@@ -143,7 +143,7 @@ class OpenrouterClient:
                                             { "type": "number" },
                                         ],
                                         "items": { "type": "number" },
-                                        "description": "'coordinate' is required for actions of mouse moving, clicking or dragging."
+                                        "description": "Required for mouse-related actions. Specifies the x,y coordinates on screen for mouse movement, clicking, or dragging operations."
                                     }
                                 },
                                 "required": [
@@ -155,17 +155,17 @@ class OpenrouterClient:
                         "type": "function",
                         "function": {
                             "name": "bash",
-                            "description": "A tool for executing shell commands. Where possible/feasible, try to use 'bash' tool instead of the 'computer' tool for better results.",
+                            "description": "A powerful tool for executing shell commands in the system environment. Supports command execution with optional restart capability.",
                             "parameters": {
                                 "type": "object",
                                 "properties": {
                                     "command": {
                                         "type": "string",
-                                        "description": "'command' is the command to be executed."
+                                        "description": "The shell command to be executed in the system environment."
                                     },
                                     "restart": {
                                         "type": "boolean",
-                                        "description": "set 'restart' true to restart the tool after execution. Default value: false. "
+                                        "description": "Optional parameter to restart the tool after command execution. Defaults to false if not specified."
                                     }
                                 }
                             }

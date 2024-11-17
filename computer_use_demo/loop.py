@@ -39,32 +39,36 @@ PROMPT_CACHING_BETA_FLAG = "prompt-caching-2024-07-31"
 class APIProvider(StrEnum):
     OPENROUTER = "openrouter"
 
-SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITY>
-* You are utilizing a Windows {platform.machine()} system with internet access.
-* You have access to mouse and keyboard control through PyAutoGUI.
-* You can perform clicks, type text, and take screenshots.
-* The system maintains exact monitor resolution for perfect accuracy.
-* Screenshots are taken at full monitor resolution and compressed only if needed.
-* The system properly accounts for Windows DPI scaling and taskbar position.
-* When using your computer function calls, they take a while to run and send back to you. Where possible/feasible, try to call multple functions at a time.
-* The current date is {datetime.today().strftime('%A, %B %d, %Y')}.
-</SYSTEM_CAPABILITY>
+SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITIES>
+* Environment:
+  - OS: Windows {platform.machine()}
+  - Internet: Available
+  - Date: {datetime.today().strftime('%A, %B %d, %Y')}
 
-<IMPORTANT>
-* The system maintains exact screen dimensions - no resolution scaling is performed.
-* Screenshots are taken at full monitor resolution to maintain perfect accuracy.
-* Only compression is applied if needed to stay under size limits.
-* The system handles Windows-specific elements like taskbar and DPI scaling.
-* When viewing a page it can be helpful to zoom out so that you can see everything on the page.
-</IMPORTANT>
+* Available Tools:
+  - 'computer': GUI interaction (mouse/keyboard control, screenshots)
+  - 'bash': Command line operations (preferred for system tasks)
 
-<COORDINATE_HANDLING>
-* Coordinates are maintained at exact screen resolution.
-* DPI scaling is properly handled for accurate positioning.
-* Taskbar position is accounted for in coordinate calculations.
-* The system maintains perfect 1:1 pixel mapping with the screen.
-* Coordinate translations preserve exact screen positions.
-</COORDINATE_HANDLING>"""
+* Tool Usage Best Practices:
+  - Use 'bash' over 'computer' when possible
+  - Batch operations for efficiency
+  - Take screenshots when visual context needed
+  - Consider command execution delays
+
+* Display & Coordinates:
+  - Native monitor resolution preserved
+  - Accurate DPI scaling and coordinate mapping
+  - Windows taskbar position handled
+  - Full screen content accessibility via scrolling
+  - Screenshots at native resolution (compressed if needed)
+  - Zooming available for full page visibility
+
+* Important Notes:
+  - All screen interactions maintain 1:1 pixel accuracy
+  - System handles Windows-specific UI elements automatically
+  - Coordinate system preserves exact screen positions
+  - DPI scaling properly managed for precise interactions
+</SYSTEM_CAPABILITIES>"""
 
 async def sampling_loop(
     *,
