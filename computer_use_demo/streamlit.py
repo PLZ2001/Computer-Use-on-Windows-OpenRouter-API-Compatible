@@ -106,28 +106,49 @@ async def main():
 
     with chat:
         # render past chats
-        for message in st.session_state.messages:
-            if isinstance(message["content"], str):
-                _render_message(message["role"], message["content"])
-            elif isinstance(message["content"], list):
-                for block in message["content"]:
-                    # the tool result we send back to the Anthropic API isn't sufficient to render all details,
-                    # so we store the tool use responses
-                    if isinstance(block, dict) and block["type"] == "tool_result":
-                        _render_message(
-                            Sender.TOOL, st.session_state.tools[block["tool_use_id"]]
-                        )
-                    else:
-                        _render_message(
-                            message["role"],
-                            cast(BetaContentBlockParam | ToolResult, block),
-                        )
+        messages = st.session_state.messages
+        for i, message in enumerate(messages):
+            if isinstance(message, dict):
+                role = message.get("role", "")
+                content = message.get("content", "")
+                
+                # 如果当前消息是role="user"且前一条是role="tool"，则跳过显示
+                if (role == "user" and 
+                    i > 0 and 
+                    isinstance(messages[i-1], dict) and 
+                    messages[i-1].get("role") == "tool"):
+                    continue
+                
+                if role == "tool":
+                    # 处理工具执行结果
+                    tool_call_id = message.get("tool_call_id", "")
+                    if tool_call_id in st.session_state.tools:
+                        _render_message(Sender.TOOL, st.session_state.tools[tool_call_id])
+                elif isinstance(content, str):
+                    _render_message(role, content)
+                elif isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict):
+                            if block.get("type") == "tool_result":
+                                tool_id = block.get("tool_use_id", "")
+                                if tool_id in st.session_state.tools:
+                                    _render_message(
+                                        Sender.TOOL, 
+                                        st.session_state.tools[tool_id]
+                                    )
+                            elif block.get("type") == "text":
+                                _render_message(role, block.get("text", ""))
+                            elif block.get("type") == "tool_use":
+                                _render_message(
+                                    role,
+                                    f'使用工具: {block.get("name", "")}\n输入: {block.get("input", "")}'
+                                )
 
         # render past http exchanges
         for identity, (request, response) in st.session_state.responses.items():
             _render_api_response(request, response, identity, http_logs)
 
-        # render past chats
+        # handle new message
         if new_message:
             st.session_state.messages.append(
                 {
@@ -259,21 +280,14 @@ def _render_error(error: Exception):
 
 def _render_message(
     sender: Sender,
-    message: str | BetaContentBlockParam | ToolResult,
+    message: str | BetaContentBlockParam | ToolResult | dict,
 ):
     """Convert input from the user or output from the agent to a streamlit message."""
-    # streamlit's hotreloading breaks isinstance checks, so we need to check for class names
-    is_tool_result = not isinstance(message, str | dict)
-    if not message or (
-        is_tool_result
-        and st.session_state.hide_images
-        and not hasattr(message, "error")
-        and not hasattr(message, "output")
-    ):
+    if not message:
         return
+        
     with st.chat_message(sender):
-        if is_tool_result:
-            message = cast(ToolResult, message)
+        if isinstance(message, ToolResult):
             if message.output:
                 if message.__class__.__name__ == "CLIResult":
                     st.code(message.output)
@@ -284,12 +298,12 @@ def _render_message(
             if message.base64_image and not st.session_state.hide_images:
                 st.image(base64.b64decode(message.base64_image))
         elif isinstance(message, dict):
-            if message["type"] == "text":
-                st.write(message["text"])
-            elif message["type"] == "tool_use":
-                st.code(f'使用工具: {message["name"]}\n输入: {message["input"]}')
-        elif "tool_result" not in message:
-            st.markdown(message)
+            if message.get("type") == "text":
+                st.write(message.get("text", ""))
+            elif message.get("type") == "tool_use":
+                st.code(f'使用工具: {message.get("name", "")}\n输入: {message.get("input", "")}')
+        else:
+            st.markdown(str(message))
 
 
 if __name__ == "__main__":
