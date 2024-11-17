@@ -29,7 +29,7 @@
 ## 已测试模型
 
 1. 推荐：`anthropic/claude-3.5-sonnet:beta`
-2. 能用，但不推荐：`openai/gpt-4o-mini`、`google/gemini-flash-1.5`
+2. 能用，但不推荐：`anthropic/claude-3-5-haiku`、`openai/gpt-4o`、`openai/gpt-4o-mini`、`google/gemini-pro-1.5`、`google/gemini-flash-1.5`
 
 ## 使用说明
 
