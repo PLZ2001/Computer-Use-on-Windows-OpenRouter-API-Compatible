@@ -52,8 +52,9 @@ SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITIES>
 * Tool Usage Best Practices:
   - Use 'bash' over 'computer' when possible
   - Where possible/feasible, try to call multiple functions/tools at a time for efficiency
-  - Take screenshots when visual context needed
-  - Consider command execution delays
+  - Take screenshots whenever context is unclear
+  - Consider functions/tools execution delays
+  - Examine screenshots carefully to validate results of functions/tools execution
 
 * Display & Coordinates:
   - Native monitor resolution preserved
