@@ -65,6 +65,8 @@ class StreamlitUI:
         """渲染侧边栏"""
         with st.sidebar:
             st.title("⚙️ 设置")
+            
+            # API配置
             st.header("API配置")
             st.session_state.api_key = st.text_input(
                 "API密钥",
@@ -80,28 +82,84 @@ class StreamlitUI:
                 value=st.session_state.model
             )
             
-            # 工具设置
-            st.header("工具配置")
-            st.number_input(
+            # Computer工具配置
+            st.header("🖥️ Computer工具配置")
+            typing_group_size = st.number_input(
+                "打字分组大小",
+                min_value=1,
+                max_value=200,
+                value=self.config.computer.TYPING_GROUP_SIZE,
+                step=1,
+                help="每组输入的字符数量"
+            )
+            screenshot_delay = st.number_input(
                 "截图延迟(秒)",
                 min_value=0.1,
                 max_value=5.0,
-                value=self.config.display.SCREENSHOT_DELAY,
+                value=self.config.computer.SCREENSHOT_DELAY,
                 step=0.1,
-                key="screenshot_delay"
+                help="执行截图前的等待时间"
             )
-            st.number_input(
+            max_image_size = st.number_input(
                 "最大图片大小(MB)",
                 min_value=0.1,
                 max_value=10.0,
-                value=self.config.display.MAX_IMAGE_SIZE / (1024 * 1024),
+                value=self.config.computer.MAX_IMAGE_SIZE / (1024 * 1024),
                 step=0.1,
-                key="max_image_size"
+                help="截图的最大文件大小"
             )
             st.session_state.hide_images = st.checkbox(
                 "隐藏图片",
-                value=st.session_state.hide_images
+                value=st.session_state.hide_images,
+                help="是否在界面上隐藏截图"
             )
+            
+            # Edit工具配置
+            st.header("📝 Edit工具配置")
+            snippet_lines = st.number_input(
+                "编辑上下文行数",
+                min_value=1,
+                max_value=20,
+                value=self.config.edit.SNIPPET_LINES,
+                step=1,
+                help="显示编辑操作前后的上下文行数"
+            )
+            
+            # 路径配置
+            st.header("📁 路径配置")
+            output_dir = st.text_input(
+                "输出目录",
+                value=str(self.config.path.OUTPUT_DIR),
+                help="工具输出文件的保存目录"
+            )
+            
+            # API配置
+            st.header("🌐 API配置")
+            max_tokens = st.number_input(
+                "最大Token数",
+                min_value=1,
+                max_value=8192,
+                value=self.config.api.MAX_TOKENS,
+                step=1,
+                help="API请求的最大token数量"
+            )
+            request_timeout = st.number_input(
+                "请求超时(秒)",
+                min_value=1.0,
+                max_value=300.0,
+                value=self.config.api.REQUEST_TIMEOUT,
+                step=1.0,
+                help="API请求的超时时间"
+            )
+            
+            # 更新配置
+            self.config.computer.TYPING_GROUP_SIZE = typing_group_size
+            self.config.computer.SCREENSHOT_DELAY = screenshot_delay
+            self.config.computer.MAX_IMAGE_SIZE = int(max_image_size * 1024 * 1024)
+            self.config.edit.SNIPPET_LINES = snippet_lines
+            self.config.path.OUTPUT_DIR = output_dir
+            self.config.api.MAX_TOKENS = max_tokens
+            self.config.api.REQUEST_TIMEOUT = request_timeout
             
             # 清除历史
             if st.button("🗑️ 清除聊天历史"):
