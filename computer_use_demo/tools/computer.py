@@ -44,9 +44,11 @@ MAX_IMAGE_SIZE = 1 * 1024 * 1024
 
 # Standard resolutions for scaling (from original repo)
 MAX_SCALING_TARGETS: dict[str, dict[str, int]] = {
-    "XGA": {"width": 1024, "height": 768},    # 4:3
-    "WXGA": {"width": 1280, "height": 800},   # 16:10
-    "FWXGA": {"width": 1366, "height": 768},  # ~16:9
+    "16:10": {"width": 1280, "height": 800},  # 16:10 standard
+    "16:9": {"width": 1366, "height": 768},   # 16:9 standard
+    "4:3": {"width": 1280, "height": 960},    # 4:3 standard
+    "3:2": {"width": 1350, "height": 900},    # 3:2 (Microsoft Surface style)
+    "5:4": {"width": 1280, "height": 1024},   # 5:4 legacy
 }
 
 Action = Literal[
