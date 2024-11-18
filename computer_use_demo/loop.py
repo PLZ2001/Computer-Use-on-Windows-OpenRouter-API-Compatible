@@ -3,6 +3,7 @@
 import json
 import platform
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Dict, List, Optional
@@ -15,6 +16,21 @@ from .tools import ComputerTool, CommandTool, EditTool, ToolCollection, ToolResu
 class APIProvider(StrEnum):
     """API提供者类型"""
     OPENROUTER = "openrouter"
+
+@dataclass
+class APIConfig:
+    """API配置"""
+    provider: APIProvider
+    api_key: str
+    base_url: str
+    model: str
+
+@dataclass
+class CallbackConfig:
+    """回调函数配置"""
+    output: Callable[[Dict[str, Any]], None]
+    tool_output: Callable[[ToolResult, str], None]
+    api_response: Callable[[httpx.Response | object | None, Exception | None], None]
 
 # 系统提示信息
 SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITIES>
@@ -48,39 +64,25 @@ SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITIES>
 
 async def sampling_loop(
     *,
-    provider: APIProvider,
-    system_prompt_suffix: str,
+    api_config: APIConfig,
+    callback_config: CallbackConfig,
     messages: List[Dict[str, Any]],
-    output_callback: Callable[[Dict[str, Any]], None],
-    tool_output_callback: Callable[[ToolResult, str], None],
-    api_response_callback: Callable[
-        [httpx.Response | object | None, Exception | None], None
-    ],
-    api_key: str,
-    base_url: str,
-    model: str,
-    only_n_most_recent_images: Optional[int] = None,
-    max_tokens: int = Config.get_instance().api.MAX_TOKENS,
+    system_prompt_suffix: str = "",
 ) -> List[Dict[str, Any]]:
     """
     代理采样循环，用于助手/工具交互。
     
     Args:
-        provider: API提供者
-        system_prompt_suffix: 系统提示后缀
+        api_config: API配置
+        callback_config: 回调函数配置
         messages: 消息历史
-        output_callback: 输出回调函数
-        tool_output_callback: 工具输出回调函数
-        api_response_callback: API响应回调函数
-        api_key: API密钥
-        base_url: API基础URL
-        model: 模型名称
-        only_n_most_recent_images: 保留的最近图片数量
-        max_tokens: 最大令牌数
+        system_prompt_suffix: 系统提示后缀
         
     Returns:
         更新后的消息历史
     """
+    config = Config.get_instance()
+    
     # 初始化工具集合
     tool_collection = ToolCollection(
         ComputerTool(),
@@ -96,34 +98,34 @@ async def sampling_loop(
 
     while True:
         # 根据提供者选择客户端
-        if provider == APIProvider.OPENROUTER:
+        if api_config.provider == APIProvider.OPENROUTER:
             from .openrouter_client import OpenrouterClient
             client = await OpenrouterClient(
-                base_url=base_url,
-                api_key=api_key,
-                model=model
+                base_url=api_config.base_url,
+                api_key=api_config.api_key,
+                model=api_config.model
             ).initialize()
 
-        # 过滤消息中的图片
-        if only_n_most_recent_images:
+        # 从配置获取并过滤最近图片
+        if config.computer.ONLY_N_MOST_RECENT_IMAGES:
             messages = _filter_recent_images(
                 messages,
-                only_n_most_recent_images,
+                config.computer.ONLY_N_MOST_RECENT_IMAGES,
             )
 
         try:
             # 调用API
             raw_response, message = await client.beta.messages.create(
-                max_tokens=max_tokens,
+                max_tokens=config.api.MAX_TOKENS,
                 messages=messages,
                 system=[system],
             )
         except Exception as e:
-            api_response_callback(getattr(e, 'response', None), e)
+            callback_config.api_response(getattr(e, 'response', None), e)
             return messages
 
         # 处理API响应
-        api_response_callback(
+        callback_config.api_response(
             raw_response.http_response,
             None
         )
@@ -135,7 +137,7 @@ async def sampling_loop(
         # 处理工具调用
         tool_results = []
         for content_block in response_params:
-            output_callback(content_block)
+            callback_config.output(content_block)
             if content_block["type"] == "tool_use":
                 result = await tool_collection.run(
                     name=content_block["name"],
@@ -147,7 +149,7 @@ async def sampling_loop(
                     content_block["id"]
                 )
                 tool_results.append(tool_result)
-                tool_output_callback(result, content_block["id"])
+                callback_config.tool_output(result, content_block["id"])
 
         if not tool_results:
             return messages

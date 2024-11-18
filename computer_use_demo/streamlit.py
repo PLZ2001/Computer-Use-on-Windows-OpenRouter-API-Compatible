@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 import anyio
 
 from .config import Config
-from .loop import APIProvider, sampling_loop
+from .loop import APIProvider, sampling_loop, APIConfig, CallbackConfig
 from .tools import ToolResult
 
 # 配置日志
@@ -108,6 +108,14 @@ class StreamlitUI:
                 step=0.1,
                 help="截图的最大文件大小"
             )
+            only_n_most_recent_images = st.number_input(
+                "保留最近图片数量",
+                min_value=1,
+                max_value=20,
+                value=self.config.computer.ONLY_N_MOST_RECENT_IMAGES,
+                step=1,
+                help="只保留最近的N张图片"
+            )
             st.session_state.hide_images = st.checkbox(
                 "隐藏图片",
                 value=st.session_state.hide_images,
@@ -156,6 +164,7 @@ class StreamlitUI:
             self.config.computer.TYPING_GROUP_SIZE = typing_group_size
             self.config.computer.SCREENSHOT_DELAY = screenshot_delay
             self.config.computer.MAX_IMAGE_SIZE = int(max_image_size * 1024 * 1024)
+            self.config.computer.ONLY_N_MOST_RECENT_IMAGES = only_n_most_recent_images
             self.config.edit.SNIPPET_LINES = snippet_lines
             self.config.path.OUTPUT_DIR = output_dir
             self.config.api.MAX_TOKENS = max_tokens
@@ -290,16 +299,25 @@ class StreamlitUI:
                         response
                     )
 
-        return await sampling_loop(
+        # 创建API配置
+        api_config = APIConfig(
             provider=APIProvider.OPENROUTER,
-            system_prompt_suffix="",
-            messages=st.session_state.messages,
-            output_callback=output_callback,
-            tool_output_callback=tool_output_callback,
-            api_response_callback=api_response_callback,
             api_key=st.session_state.api_key,
             base_url=st.session_state.base_url,
             model=st.session_state.model
+        )
+
+        # 创建回调配置
+        callback_config = CallbackConfig(
+            output=output_callback,
+            tool_output=tool_output_callback,
+            api_response=api_response_callback
+        )
+
+        return await sampling_loop(
+            api_config=api_config,
+            callback_config=callback_config,
+            messages=st.session_state.messages,
         )
 
     async def process_messages(self):
