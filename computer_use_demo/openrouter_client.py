@@ -2,25 +2,22 @@
 Client for interacting with Openrouter API.
 """
 import json
-import os
+from typing import TypedDict, List, Dict, Any, Optional
+
 import httpx
-from typing import Any, Dict, List, Optional, Union
-from anthropic.types.beta import BetaMessage
 
 class OpenrouterResponse:
-    """Wrapper for Openrouter API response to match Anthropic's interface."""
-    def __init__(self, beta_message: BetaMessage, http_response: httpx.Response):
-        self.beta_message = beta_message
+    """Wrapper for Openrouter API response to match interface."""
+    def __init__(self, message, http_response: httpx.Response):
+        self.message = message
         self.http_response = http_response
 
-    def parse(self) -> BetaMessage:
-        return self.beta_message
+    def parse(self):
+        return self.message
 
 class OpenrouterClient:
     """Client for interacting with Openrouter API."""
-    
-    SUPPORTED_MODELS = ["anthropic/claude-3.5-sonnet:beta"]  # List of supported models
-    
+        
     def __init__(self, base_url: str = None, api_key: str = None, model: str = None):
         self.base_url = base_url
         self.api_key = api_key
@@ -51,7 +48,7 @@ class OpenrouterClient:
                 self.client = client
                 
             def with_raw_response(self):
-                """Method chaining to match Anthropic's interface"""
+                """Method chaining to match interface"""
                 return self
                 
             async def create(
@@ -72,7 +69,7 @@ class OpenrouterClient:
                     betas: List of beta features to enable (currently not used by Openrouter)
                     
                 Returns:
-                    OpenrouterResponse: Wrapper containing both the HTTP response and parsed BetaMessage
+                    OpenrouterResponse: Wrapper containing both the HTTP response and parsed Message
                     
                 Raises:
                     ValueError: If the model is not supported or if the input format is invalid
@@ -245,7 +242,7 @@ class OpenrouterClient:
                         raise RuntimeError(f"Openrouter API returned error {e.response.status_code}: {e.response.text}")
                 
                     try:
-                        # Convert Openrouter response to Anthropic format
+                        # Convert Openrouter response to Message format
                         openrouter_response = http_response.json()
                         print(openrouter_response)
                     except ValueError as e:
@@ -272,19 +269,19 @@ class OpenrouterClient:
                                         "input": json.loads(item['function']['arguments']),
                                         'id': item['id']
                         })
-                # Create BetaMessage response
-                beta_message = BetaMessage(
-                    id="msg_" + http_response.headers.get("X-Request-ID", "unknown"),
-                    type="message",
-                    role="assistant",
-                    content=content,
-                    model=self.client.model,
-                    stop_reason= "tool_use" if openrouter_response['choices'][0]['finish_reason'] == "tool_calls" else "stop_sequence",
-                    stop_sequence=None,
-                    usage={
+                # Create Message response
+                message = {
+                    "id": "msg_" + http_response.headers.get("X-Request-ID", "unknown"),
+                    "type": "message",
+                    "role": "assistant",
+                    "content": content,
+                    "model": self.client.model,
+                    "stop_reason": "tool_use" if openrouter_response['choices'][0]['finish_reason'] == "tool_calls" else "stop_sequence",
+                    "stop_sequence": None,
+                    "usage": {
                         "input_tokens": openrouter_response['usage']['prompt_tokens'],  
                         "output_tokens": openrouter_response['usage']['completion_tokens']
                     }
-                )
+                }
                 
-                return OpenrouterResponse(beta_message, http_response), openrouter_response['choices'][0]['message']
+                return OpenrouterResponse(message, http_response), openrouter_response['choices'][0]['message']

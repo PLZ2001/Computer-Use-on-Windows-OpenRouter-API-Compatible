@@ -2,10 +2,10 @@
 
 from collections import defaultdict
 from pathlib import Path
-from typing import Literal, Optional, Any, get_args
+from typing import Literal, Optional, get_args
 import logging
 
-from .base import BaseAnthropicTool, CLIResult, ToolError, ToolResult
+from .base import BaseAnthropicTool, ToolError, ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -24,17 +24,10 @@ class EditTool(BaseAnthropicTool):
     """Enhanced file editing tool with history support."""
 
     name: Literal["str_replace_editor"] = "str_replace_editor"
-    api_type: Literal["text_editor_20241022"] = "text_editor_20241022"
 
     def __init__(self):
         self._file_history = defaultdict(list)
         super().__init__()
-
-    def to_params(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "type": self.api_type,
-        }
 
     async def __call__(
         self,

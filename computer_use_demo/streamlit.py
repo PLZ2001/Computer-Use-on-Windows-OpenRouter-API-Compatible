@@ -5,21 +5,14 @@ Entrypoint for streamlit, see https://docs.streamlit.io/
 import asyncio
 import base64
 import os
-import subprocess
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import StrEnum
 from functools import partial
-from pathlib import Path
-from typing import cast
+from typing import Dict, Any
 
 import httpx
 import streamlit as st
-from anthropic import RateLimitError
-from anthropic.types.beta import (
-    BetaContentBlockParam,
-    BetaTextBlockParam,
-)
 from streamlit.delta_generator import DeltaGenerator
 
 from computer_use_demo.loop import (
@@ -28,8 +21,6 @@ from computer_use_demo.loop import (
 )
 from computer_use_demo.tools import ToolResult
 
-CONFIG_DIR = Path(os.path.expanduser("~/.anthropic"))
-API_KEY_FILE = CONFIG_DIR / "api_key"
 STREAMLIT_STYLE = """
 <style>
     /* Hide chat input while agent loop is running */
@@ -49,7 +40,6 @@ class Sender(StrEnum):
     BOT = "assistant"
     TOOL = "tool"
 
-
 def setup_state():
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -63,8 +53,6 @@ def setup_state():
         st.session_state.provider = APIProvider.OPENROUTER.value
     if "provider_radio" not in st.session_state:
         st.session_state.provider_radio = st.session_state.provider
-    if "auth_validated" not in st.session_state:
-        st.session_state.auth_validated = False
     if "responses" not in st.session_state:
         st.session_state.responses = {}
     if "tools" not in st.session_state:
@@ -96,8 +84,6 @@ async def main():
             key="custom_system_prompt",
             help="添加至系统提示的额外指令",
         )
-    if not st.session_state.auth_validated:
-        st.session_state.auth_validated = True
 
     chat, http_logs = st.tabs(["对话", "HTTP日志"])
     new_message = st.chat_input(
@@ -156,7 +142,7 @@ async def main():
             st.session_state.messages.append(
                 {
                     "role": Sender.USER,
-                    "content": [BetaTextBlockParam(type="text", text=new_message)],
+                    "content": [{"type": "text", "text": new_message}],
                 }
             )
             _render_message(Sender.USER, new_message)
@@ -190,32 +176,6 @@ async def main():
                 model=st.session_state.model,
                 only_n_most_recent_images=st.session_state.only_n_most_recent_images,
             )
-
-
-def load_from_storage(filename: str) -> str | None:
-    """Load data from a file in the storage directory."""
-    try:
-        file_path = CONFIG_DIR / filename
-        if file_path.exists():
-            data = file_path.read_text().strip()
-            if data:
-                return data
-    except Exception as e:
-        st.write(f"Debug: Error loading {filename}: {e}")
-    return None
-
-
-def save_to_storage(filename: str, data: str) -> None:
-    """Save data to a file in the storage directory."""
-    try:
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        file_path = CONFIG_DIR / filename
-        file_path.write_text(data)
-        # Ensure only user can read/write the file
-        file_path.chmod(0o600)
-    except Exception as e:
-        st.write(f"Debug: Error saving {filename}: {e}")
-
 
 def _api_response_callback(
     request: httpx.Request,
@@ -267,23 +227,16 @@ def _render_api_response(
 
 
 def _render_error(error: Exception):
-    if isinstance(error, RateLimitError):
-        body = "You have been rate limited."
-        if retry_after := error.response.headers.get("retry-after"):
-            body += f" **Retry after {str(timedelta(seconds=int(retry_after)))} (HH:MM:SS).** See our API [documentation](https://docs.anthropic.com/en/api/rate-limits) for more details."
-        body += f"\n\n{error.message}"
-    else:
-        body = str(error)
-        body += "\n\n**Traceback:**"
-        lines = "\n".join(traceback.format_exception(error))
-        body += f"\n\n```{lines}```"
-    save_to_storage(f"error_{datetime.now().timestamp()}.md", body)
+    body = str(error)
+    body += "\n\n**Traceback:**"
+    lines = "\n".join(traceback.format_exception(error))
+    body += f"\n\n```{lines}```"
     st.error(f"**{error.__class__.__name__}**\n\n{body}", icon=":material/error:")
 
 
 def _render_message(
     sender: Sender,
-    message: str | BetaContentBlockParam | ToolResult | dict,
+    message: str | Dict[str, Any] | ToolResult,
 ):
     """Convert input from the user or output from the agent to a streamlit message."""
     if not message:

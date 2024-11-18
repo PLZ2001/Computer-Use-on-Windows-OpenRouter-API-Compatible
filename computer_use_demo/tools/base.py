@@ -42,10 +42,6 @@ class BaseAnthropicTool:
         """Execute the tool with the given parameters."""
         raise NotImplementedError()
 
-    def to_params(self) -> dict[str, Any]:
-        """Convert tool to API parameters."""
-        raise NotImplementedError()
-
 class ToolCollection:
     """Collection of tools that can be used by the agent."""
     
@@ -57,7 +53,3 @@ class ToolCollection:
         if name not in self.tools:
             return ToolResult(error=f"Tool {name} not found")
         return await self.tools[name](**tool_input)
-
-    def to_params(self) -> list[dict[str, Any]]:
-        """Convert all tools to API parameters."""
-        return [tool.to_params() for tool in self.tools.values()]

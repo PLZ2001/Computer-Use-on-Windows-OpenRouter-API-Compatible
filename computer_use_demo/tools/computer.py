@@ -6,17 +6,14 @@ import io
 import os
 import logging
 import ctypes
-from datetime import datetime
 from enum import StrEnum
-from pathlib import Path
-from typing import Literal, TypedDict, Optional, Tuple, Union
+from typing import Literal, TypedDict, Optional, Tuple
 from uuid import uuid4
 
 import cv2
 import numpy as np
 import pyautogui
-from PIL import Image, ImageDraw
-from anthropic.types.beta import BetaToolComputerUse20241022Param
+from PIL import Image
 from dotenv import load_dotenv
 import pyperclip
 
@@ -230,7 +227,6 @@ class ComputerTool(BaseAnthropicTool):
     """
 
     name: Literal["computer"] = "computer"
-    api_type: Literal["computer_20241022"] = "computer_20241022"
     width: int
     height: int
     display_num: int | None
@@ -248,9 +244,6 @@ class ComputerTool(BaseAnthropicTool):
             "display_height_px": self.target_height,
             "display_number": self.display_num,
         }
-
-    def to_params(self) -> BetaToolComputerUse20241022Param:
-        return {"name": self.name, "type": self.api_type, **self.options}
 
     def __init__(self):
         super().__init__()

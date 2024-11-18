@@ -1,5 +1,5 @@
 """
-Agentic sampling loop that calls the Anthropic API and local implementation of anthropic-defined computer use tools.
+Agentic sampling loop that calls the OpenRouter API and local implementation of computer use tools.
 """
 
 import json
@@ -7,34 +7,11 @@ import platform
 from collections.abc import Callable
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, cast
+from typing import Any, TypedDict, List, Dict, Optional
 
 import httpx
-from anthropic import (
-    Anthropic,
-    AnthropicBedrock,
-    AnthropicVertex,
-    APIError,
-    APIResponseValidationError,
-    APIStatusError,
-)
-from anthropic.types.beta import (
-    BetaCacheControlEphemeralParam,
-    BetaContentBlockParam,
-    BetaImageBlockParam,
-    BetaMessage,
-    BetaMessageParam,
-    BetaTextBlock,
-    BetaTextBlockParam,
-    BetaToolResultBlockParam,
-    BetaToolUseBlockParam,
-)
 
 from .tools import ComputerTool, CommandTool, EditTool, ToolCollection, ToolResult
-
-COMPUTER_USE_BETA_FLAG = "computer-use-2024-10-22"
-PROMPT_CACHING_BETA_FLAG = "prompt-caching-2024-07-31"
-
 
 class APIProvider(StrEnum):
     OPENROUTER = "openrouter"
@@ -76,8 +53,8 @@ async def sampling_loop(
     *,
     provider: APIProvider,
     system_prompt_suffix: str,
-    messages: list[BetaMessageParam],
-    output_callback: Callable[[BetaContentBlockParam], None],
+    messages: List[Dict[str, Any]],
+    output_callback: Callable[[Dict[str, Any]], None],
     tool_output_callback: Callable[[ToolResult, str], None],
     api_response_callback: Callable[
         [httpx.Request, httpx.Response | object | None, Exception | None], None
@@ -96,24 +73,15 @@ async def sampling_loop(
         CommandTool(),
         EditTool(),
     )
-    system = BetaTextBlockParam(
-        type="text",
-        text=f"{SYSTEM_PROMPT}{' ' + system_prompt_suffix if system_prompt_suffix else ''}",
-    )
+    system = {
+        "type": "text",
+        "text": f"{SYSTEM_PROMPT}{' ' + system_prompt_suffix if system_prompt_suffix else ''}",
+    }
 
     while True:
-        enable_prompt_caching = False
-        betas = [COMPUTER_USE_BETA_FLAG]
         if provider == APIProvider.OPENROUTER:
             from .openrouter_client import OpenrouterClient
             client = await (OpenrouterClient(base_url=base_url, api_key=api_key, model=model).initialize())  # Initialize asynchronously
-            enable_prompt_caching = False
-
-        if enable_prompt_caching:
-            betas.append(PROMPT_CACHING_BETA_FLAG)
-            _inject_prompt_caching(messages)
-            # Is it ever worth it to bust the cache with prompt caching?
-            system["cache_control"] = {"type": "ephemeral"}
 
         if only_n_most_recent_images:
             messages = _maybe_filter_to_n_most_recent_images(
@@ -122,20 +90,14 @@ async def sampling_loop(
             )
 
         # Call the API
-        # we use raw_response to provide debug information to streamlit. Your
-        # implementation may be able call the SDK directly with:
-        # `response = client.messages.create(...)` instead.
         try:
             raw_response, message = await client.beta.messages.create(
                 max_tokens=max_tokens,
                 messages=messages,
                 system=[system],
             )
-        except (APIStatusError, APIResponseValidationError) as e:
-            api_response_callback(e.request, e.response, e)
-            return messages
-        except APIError as e:
-            api_response_callback(e.request, e.body, e)
+        except Exception as e:
+            api_response_callback(e.request, getattr(e, 'response', None), e)
             return messages
 
         api_response_callback(
@@ -146,13 +108,13 @@ async def sampling_loop(
         response_params = _response_to_params(response)
         messages.append(message)
 
-        tool_result_content: list[BetaToolResultBlockParam] = []
+        tool_result_content: List[Dict[str, Any]] = []
         for content_block in response_params:
             output_callback(content_block)
             if content_block["type"] == "tool_use":
                 result = await tool_collection.run(
                     name=content_block["name"],
-                    tool_input=cast(dict[str, Any], content_block["input"]),
+                    tool_input=content_block["input"],
                 )
                 tool_result_content.append(
                     _make_api_tool_result(result, content_block["name"], content_block["id"])
@@ -168,7 +130,7 @@ async def sampling_loop(
 
 
 def _maybe_filter_to_n_most_recent_images(
-    messages: list[BetaMessageParam],
+    messages: List[Dict[str, Any]],
     images_to_keep: int,
 ):
     """
@@ -211,45 +173,22 @@ def _maybe_filter_to_n_most_recent_images(
 
 
 def _response_to_params(
-    response: BetaMessage,
-) -> list[BetaTextBlockParam | BetaToolUseBlockParam]:
-    res: list[BetaTextBlockParam | BetaToolUseBlockParam] = []
-    for block in response.content:
-        if isinstance(block, BetaTextBlock):
-            res.append({"type": "text", "text": block.text})
+    response: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    res: List[Dict[str, Any]] = []
+    for block in response.get("content", []):
+        if block.get("type") == "text":
+            res.append({"type": "text", "text": block.get("text", "")})
         else:
-            res.append(cast(BetaToolUseBlockParam, block.model_dump()))
+            res.append(block)
     return res
 
 
-def _inject_prompt_caching(
-    messages: list[BetaMessageParam],
-):
-    """
-    Set cache breakpoints for the 3 most recent turns
-    one cache breakpoint is left for tools/system prompt, to be shared across sessions
-    """
-
-    breakpoints_remaining = 3
-    for message in reversed(messages):
-        if message["role"] == "user" and isinstance(
-            content := message["content"], list
-        ):
-            if breakpoints_remaining:
-                breakpoints_remaining -= 1
-                content[-1]["cache_control"] = BetaCacheControlEphemeralParam(
-                    {"type": "ephemeral"}
-                )
-            else:
-                content[-1].pop("cache_control", None)
-                # we'll only every have one extra turn per loop
-                break
-
 def _make_api_tool_result(
     result: ToolResult, tool_name: str, tool_use_id: str
-) -> BetaToolResultBlockParam:
-    """Convert an agent ToolResult to an API ToolResultBlockParam."""
-    tool_result_content: list[BetaTextBlockParam | BetaImageBlockParam] | str = []
+) -> Dict[str, Any]:
+    """Convert an agent ToolResult to an API tool result format."""
+    tool_result_content: List[Dict[str, Any]] | str = []
     is_error = False
     if result.error:
         is_error = True

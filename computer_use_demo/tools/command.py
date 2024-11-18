@@ -5,9 +5,9 @@ import logging
 import os
 import subprocess
 import concurrent.futures
-from typing import Any, Literal
+from typing import Literal
 
-from .base import BaseAnthropicTool, CLIResult, ToolError, ToolResult
+from .base import BaseAnthropicTool, CLIResult, ToolResult
 from .computer import ComputerTool
 
 logger = logging.getLogger(__name__)
@@ -16,14 +16,10 @@ class CommandTool(BaseAnthropicTool):
     """Tool for executing shell commands."""
 
     name: Literal["bash"] = "bash"
-    api_type: Literal["bash_20241022"] = "bash_20241022"
 
     def __init__(self):
         super().__init__()
         self.computer = ComputerTool()
-
-    def to_params(self) -> dict[str, Any]:
-        return {"name": self.name, "type": self.api_type}
 
     async def __call__(
         self,
