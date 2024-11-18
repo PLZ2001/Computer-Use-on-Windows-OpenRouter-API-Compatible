@@ -450,24 +450,22 @@ class ComputerTool(BaseTool):
         
         scaled = screenshot.resize((scaled_width, scaled_height), Image.Resampling.LANCZOS)
         
-        # 尝试不同的JPEG压缩级别
+        # 尝试不同的压缩级别
         compression_levels = [
-            # 1. 高质量JPEG
-            lambda: self._save_jpeg(scaled, quality=85),
-            # 2. 中等质量JPEG
-            lambda: self._save_jpeg(scaled, quality=60),
-            # 3. 转换为灰度 + 中等质量JPEG
-            lambda: self._save_jpeg(scaled.convert('L'), quality=60),
-            # 4. 降低分辨率 + 中等质量JPEG
-            lambda: self._save_jpeg(scaled.resize(
+            # 1. 原始PNG
+            lambda: self._save_png(scaled),
+            # 2. 降低分辨率 + PNG
+            lambda: self._save_png(scaled.resize(
                 (scaled_width//2, scaled_height//2), 
                 Image.Resampling.LANCZOS
-            ), quality=60),
-            # 5. 最低质量JPEG
-            lambda: self._save_jpeg(scaled.resize(
+            )),
+            # 3. 转换为灰度 + PNG
+            lambda: self._save_png(scaled.convert('L')),
+            # 4. 降低分辨率 + 灰度 + PNG
+            lambda: self._save_png(scaled.resize(
                 (scaled_width//2, scaled_height//2), 
                 Image.Resampling.LANCZOS
-            ), quality=30),
+            ).convert('L')),
         ]
         
         # 尝试每个压缩级别直到文件大小小于限制
@@ -489,13 +487,10 @@ class ComputerTool(BaseTool):
         return [s[i:i + chunk_size] for i in range(0, len(s), chunk_size)]
 
     @staticmethod
-    def _save_jpeg(image: Image.Image, quality: int = 85) -> io.BytesIO:
-        """将图像保存为JPEG格式"""
+    def _save_png(image: Image.Image) -> io.BytesIO:
+        """将图像保存为PNG格式"""
         img_buffer = io.BytesIO()
-        # 转换为RGB（如果需要）
-        if image.mode == 'RGBA':
-            image = image.convert('RGB')
-        image.save(img_buffer, format='JPEG', quality=quality, optimize=True)
+        image.save(img_buffer, format='PNG', optimize=True)
         img_buffer.seek(0)
         return img_buffer
 

@@ -11,7 +11,7 @@ class ComputerConfig:
     # 显示相关
     TYPING_GROUP_SIZE: int = 50
     SCREENSHOT_DELAY: float = 1.5
-    MAX_IMAGE_SIZE: int = 1 * 1024 * 1024  # 1MB
+    MAX_IMAGE_SIZE: int = 3 * 1024 * 1024  # 3MB
     
     # 分辨率目标
     SCALING_TARGETS: Dict[str, Dict[str, int]] = None
