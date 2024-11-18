@@ -64,12 +64,8 @@ class CommandTool(BaseTool):
             # 使用线程池执行同步的subprocess调用
             loop = asyncio.get_event_loop()
             with concurrent.futures.ThreadPoolExecutor() as pool:
-                if os.name == 'nt':
-                    # Windows: 使用cmd.exe执行命令
-                    full_command = f'cmd /c {command}'
-                else:
-                    # Unix: 使用bash执行命令
-                    full_command = command
+                # Windows: 使用cmd.exe执行命令
+                full_command = f'cmd /c {command}'
 
                 # 在线程池中执行同步的subprocess.run
                 process_result = await loop.run_in_executor(

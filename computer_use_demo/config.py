@@ -8,8 +8,6 @@ from pathlib import Path
 @dataclass
 class DisplayConfig:
     """显示相关配置"""
-    TYPING_DELAY_MS: int = 12
-    TYPING_GROUP_SIZE: int = 50
     SCREENSHOT_DELAY: float = 1.5
     MAX_IMAGE_SIZE: int = 1 * 1024 * 1024  # 1MB
 

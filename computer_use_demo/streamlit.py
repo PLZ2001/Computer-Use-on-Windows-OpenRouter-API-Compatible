@@ -66,10 +66,6 @@ class StreamlitUI:
             st.session_state.model = os.getenv("OPENROUTER_MODEL", "anthropic/claude-2")
         if "hide_images" not in st.session_state:
             st.session_state.hide_images = False
-        if "response_container" not in st.session_state:
-            st.session_state.response_container = None
-        if "message_history_container" not in st.session_state:
-            st.session_state.message_history_container = None
 
     def render_sidebar(self):
         """渲染侧边栏"""
@@ -122,15 +118,13 @@ class StreamlitUI:
     def _render_message(
         self,
         sender: Sender,
-        message: Union[str, Dict[str, Any], ToolResult],
-        container=None
+        message: Union[str, Dict[str, Any], ToolResult]
     ):
         """渲染单条消息"""
         if not message:
             return
             
-        chat_message = (container or st).chat_message(sender)
-        with chat_message:
+        with st.chat_message(sender):
             if isinstance(message, ToolResult):
                 if message.output:
                     st.code(message.output)
@@ -200,55 +194,49 @@ class StreamlitUI:
                 "content": prompt
             })
             
-            # 创建响应容器
-            st.session_state.response_container = st.container()
-            
             await self.process_messages()
 
     async def _run_sampling_loop(self):
         """运行采样循环"""
         def output_callback(content: Dict[str, Any]):
             """输出回调"""
-            with st.session_state.response_container:
-                self._render_message(Sender.BOT, content)
+            self._render_message(Sender.BOT, content)
 
         def tool_output_callback(result: ToolResult, tool_id: str):
             """工具输出回调"""
             # 缓存工具结果
             st.session_state.tools[tool_id] = result
             
-            with st.session_state.response_container:
-                if result.error:
+            if result.error:
+                self._render_message(
+                    Sender.TOOL,
+                    {
+                        "type": "error",
+                        "text": f"工具执行错误 (ID: {tool_id}): {result.error}"
+                    }
+                )
+            else:
+                if result.output or result.base64_image:
                     self._render_message(
                         Sender.TOOL,
-                        {
-                            "type": "error",
-                            "text": f"工具执行错误 (ID: {tool_id}): {result.error}"
-                        }
+                        result
                     )
-                else:
-                    if result.output or result.base64_image:
-                        self._render_message(
-                            Sender.TOOL,
-                            result
-                        )
 
-        def api_response_callback(request: Any, response: Optional[Any], error: Optional[Exception]):
+        def api_response_callback(response: Optional[Any], error: Optional[Exception]):
             """API响应回调"""
             if error:
-                with st.session_state.response_container:
+                self._render_message(
+                    Sender.BOT,
+                    {
+                        "type": "error",
+                        "text": f"API错误: {str(error)}"
+                    }
+                )
+                if response:
                     self._render_message(
                         Sender.BOT,
-                        {
-                            "type": "error",
-                            "text": f"API错误: {str(error)}"
-                        }
+                        response
                     )
-                    if response:
-                        self._render_message(
-                            Sender.BOT,
-                            response
-                        )
 
         return await sampling_loop(
             provider=APIProvider.OPENROUTER,
@@ -288,12 +276,10 @@ class StreamlitUI:
         # 渲染侧边栏
         self.render_sidebar()
         
-        # 主界面
-        # 1. 显示历史消息
-        with st.container():
-            self.render_messages()
+        # 显示历史消息
+        self.render_messages()
         
-        # 2. 处理用户输入
+        # 处理用户输入
         await self.handle_user_input()
 
 async def main():

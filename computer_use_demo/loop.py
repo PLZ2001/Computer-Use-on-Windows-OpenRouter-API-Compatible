@@ -54,7 +54,7 @@ async def sampling_loop(
     output_callback: Callable[[Dict[str, Any]], None],
     tool_output_callback: Callable[[ToolResult, str], None],
     api_response_callback: Callable[
-        [httpx.Request, httpx.Response | object | None, Exception | None], None
+        [httpx.Response | object | None, Exception | None], None
     ],
     api_key: str,
     base_url: str,
@@ -119,12 +119,11 @@ async def sampling_loop(
                 system=[system],
             )
         except Exception as e:
-            api_response_callback(e.request, getattr(e, 'response', None), e)
+            api_response_callback(getattr(e, 'response', None), e)
             return messages
 
         # 处理API响应
         api_response_callback(
-            raw_response.http_response.request,
             raw_response.http_response,
             None
         )
@@ -248,12 +247,21 @@ def _make_tool_result(
     Returns:
         API格式的工具结果
     """
-    tool_result_content: List[Dict[str, Any]] | str = []
+    tool_result_content: List[Dict[str, Any]] = []
     is_error = False
 
     if result.error:
         is_error = True
-        tool_result_content = result
+        tool_result_content.extend([
+            {
+                "type": "text",
+                "text": "工具执行出错",
+            },
+            {
+                "type": "text",
+                "text": str(result.error),
+            }
+        ])
     else:
         if result.output:
             tool_result_content.extend([
