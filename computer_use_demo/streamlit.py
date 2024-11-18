@@ -123,6 +123,14 @@ async def main():
                     # 处理工具执行结果
                     tool_call_id = message.get("tool_call_id", "")
                     if tool_call_id in st.session_state.tools:
+                        _render_message(
+                                    Sender.BOT,
+                                    {
+                                        "type": "tool_use",
+                                        "name": message.get("name", ""),
+                                        "input": next((call for call in messages[i-1]["tool_calls"] if call["id"] == tool_call_id), {}).get("function", {}).get("arguments", ""),
+                                    }
+                                )
                         _render_message(Sender.TOOL, st.session_state.tools[tool_call_id])
                 elif isinstance(content, str):
                     _render_message(role, content)
@@ -138,11 +146,6 @@ async def main():
                                     )
                             elif block.get("type") == "text":
                                 _render_message(role, block.get("text", ""))
-                            elif block.get("type") == "tool_use":
-                                _render_message(
-                                    role,
-                                    f'使用工具: {block.get("name", "")}\n输入: {block.get("input", "")}'
-                                )
 
         # render past http exchanges
         for identity, (request, response) in st.session_state.responses.items():
@@ -299,7 +302,7 @@ def _render_message(
                 st.image(base64.b64decode(message.base64_image))
         elif isinstance(message, dict):
             if message.get("type") == "text":
-                st.write(message.get("text", ""))
+                st.markdown(message.get("text", ""))
             elif message.get("type") == "tool_use":
                 st.code(f'使用工具: {message.get("name", "")}\n输入: {message.get("input", "")}')
         else:

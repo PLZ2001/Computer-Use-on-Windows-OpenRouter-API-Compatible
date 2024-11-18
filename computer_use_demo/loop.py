@@ -253,16 +253,28 @@ def _make_api_tool_result(
     is_error = False
     if result.error:
         is_error = True
-        tool_result_content = _maybe_prepend_system_tool_result(result, result.error)
+        tool_result_content = result
     else:
         if result.output:
             tool_result_content.append(
                 {
                     "type": "text",
-                    "text": _maybe_prepend_system_tool_result(result, result.output),
+                    "text": "TOOL RESULT FOLLOWING",
+                }
+            )
+            tool_result_content.append(
+                {
+                    "type": "text",
+                    "text": result.output,
                 }
             )
         if result.base64_image:
+            tool_result_content.append(
+                {
+                    "type": "text",
+                    "text": "TOOL RESULT FOLLOWING",
+                }
+            )
             tool_result_content.append(
                 {
                     "type": "image_url",
@@ -281,9 +293,3 @@ def _make_api_tool_result(
         "name": tool_name,
         "tool_use_id": tool_use_id,
     }
-
-
-def _maybe_prepend_system_tool_result(result: ToolResult, result_text: str):
-    if result.system:
-        result_text = f"<system>{result.system}</system>\n{result_text}"
-    return result_text
