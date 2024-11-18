@@ -10,9 +10,6 @@ from .exceptions import FileOperationError, ValidationError
 
 logger = logging.getLogger(__name__)
 
-# 常量
-SNIPPET_LINES = 4  # 显示编辑上下文的行数
-
 Command = Literal[
     "view",
     "create",
@@ -283,8 +280,8 @@ class EditTool(BaseTool):
         lines = content.split('\n')
         for i, line in enumerate(lines):
             if old_str in line:
-                start = max(0, i - SNIPPET_LINES)
-                end = min(len(lines), i + SNIPPET_LINES + 1)
+                start = max(0, i - self.config.edit.SNIPPET_LINES)
+                end = min(len(lines), i + self.config.edit.SNIPPET_LINES + 1)
                 snippet = '\n'.join(lines[start:end])
                 return ToolResult(
                     output=f"替换成功。上下文如下:\n"
@@ -319,8 +316,8 @@ class EditTool(BaseTool):
         self._file_manager.write_file(path, new_content)
 
         # 创建编辑片段
-        start = max(0, insert_line - SNIPPET_LINES)
-        end = min(len(new_lines), insert_line + SNIPPET_LINES + new_str.count('\n') + 1)
+        start = max(0, insert_line - self.config.edit.SNIPPET_LINES)
+        end = min(len(new_lines), insert_line + self.config.edit.SNIPPET_LINES + new_str.count('\n') + 1)
         snippet = '\n'.join(new_lines[start:end])
 
         return ToolResult(

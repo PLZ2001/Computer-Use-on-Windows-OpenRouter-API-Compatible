@@ -2,14 +2,34 @@
 
 import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, Optional
 from pathlib import Path
 
 @dataclass
-class DisplayConfig:
-    """显示相关配置"""
+class ComputerConfig:
+    """Computer工具配置"""
+    # 显示相关
+    TYPING_GROUP_SIZE: int = 50
     SCREENSHOT_DELAY: float = 1.5
     MAX_IMAGE_SIZE: int = 1 * 1024 * 1024  # 1MB
+    
+    # 分辨率目标
+    SCALING_TARGETS: Dict[str, Dict[str, int]] = None
+    
+    def __post_init__(self):
+        if self.SCALING_TARGETS is None:
+            self.SCALING_TARGETS = {
+                "16:10": {"width": 1280, "height": 800},   # 16:10标准
+                "16:9": {"width": 1366, "height": 768},    # 16:9标准
+                "4:3": {"width": 1280, "height": 960},     # 4:3标准
+                "3:2": {"width": 1350, "height": 900},     # 3:2标准
+                "5:4": {"width": 1280, "height": 1024},    # 5:4标准
+            }
+
+@dataclass
+class EditConfig:
+    """Edit工具配置"""
+    SNIPPET_LINES: int = 4  # 显示编辑上下文的行数
 
 @dataclass
 class PathConfig:
@@ -32,7 +52,9 @@ class Config:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance.display = DisplayConfig()
+            # 初始化各工具的配置
+            cls._instance.computer = ComputerConfig()
+            cls._instance.edit = EditConfig()
             cls._instance.path = PathConfig()
             cls._instance.api = APIConfig()
         return cls._instance

@@ -218,7 +218,7 @@ class ComputerTool(BaseTool):
         best_target = None
         best_ratio_diff = float('inf')
         
-        for target in self._get_scaling_targets().values():
+        for target in self.config.computer.SCALING_TARGETS.values():
             target_ratio = target["width"] / target["height"]
             ratio_diff = abs(target_ratio - aspect_ratio)
             
@@ -334,7 +334,7 @@ class ComputerTool(BaseTool):
                 elif action == Action.TYPE:
                     results = []
                     for _ in range(repeat_times):
-                        for chunk in self._chunks(text, self.config.display.TYPING_GROUP_SIZE):
+                        for chunk in self._chunks(text, self.config.computer.TYPING_GROUP_SIZE):
                             self.logger.debug(f"输入文本块: {chunk}")
                             # 保存原始剪贴板内容
                             original_clipboard = pyperclip.paste()
@@ -438,7 +438,7 @@ class ComputerTool(BaseTool):
 
     async def take_screenshot(self) -> ToolResult:
         """获取屏幕截图"""
-        await asyncio.sleep(self.config.display.SCREENSHOT_DELAY)
+        await asyncio.sleep(self.config.computer.SCREENSHOT_DELAY)
         
         # 使用PyAutoGUI获取截图
         screenshot = pyautogui.screenshot()
@@ -476,7 +476,7 @@ class ComputerTool(BaseTool):
             size = len(img_buffer.getvalue())
             self.logger.debug(f"压缩结果大小: {size/1024/1024:.1f}MB")
             
-            if size <= self.config.display.MAX_IMAGE_SIZE:
+            if size <= self.config.computer.MAX_IMAGE_SIZE:
                 return ToolResult(base64_image=base64.b64encode(img_buffer.getvalue()).decode())
         
         # 如果所有压缩方法都无法达到目标大小，使用最后一个结果
@@ -534,14 +534,3 @@ class ComputerTool(BaseTool):
             logger = logging.getLogger(__name__)
             logger.error(f"获取坐标系统失败: {e}")
             return 1.0, 0, pyautogui.size()[0], pyautogui.size()[1]
-
-    @staticmethod
-    def _get_scaling_targets() -> Dict[str, Dict[str, int]]:
-        """获取标准缩放目标"""
-        return {
-            "16:10": {"width": 1280, "height": 800},   # 16:10标准
-            "16:9": {"width": 1366, "height": 768},    # 16:9标准
-            "4:3": {"width": 1280, "height": 960},     # 4:3标准
-            "3:2": {"width": 1350, "height": 900},     # 3:2标准
-            "5:4": {"width": 1280, "height": 1024},    # 5:4标准
-        }
