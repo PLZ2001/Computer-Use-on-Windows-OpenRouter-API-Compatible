@@ -8,6 +8,7 @@ import httpx
 
 from .config import Config
 from .tools.exceptions import APIError
+from .tools.base import ToolFactory
 
 logger = logging.getLogger(__name__)
 
@@ -205,120 +206,18 @@ class OpenrouterClient:
 
             def _get_tool_definitions(self) -> List[Dict[str, Any]]:
                 """获取工具定义"""
-                return [{
-                    "type": "function",
-                    "function": {
-                        "name": "computer",
-                        "description": "一个全面的工具，支持与计算机输入/输出设备交互，包括屏幕、键盘和鼠标。支持输入、点击、滚动和截图等操作。",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "action": {
-                                    "type": "string",
-                                    "enum": [
-                                        "key",
-                                        "type",
-                                        "mouse_move",
-                                        "left_click",
-                                        "left_click_drag",
-                                        "right_click",
-                                        "middle_click",
-                                        "double_click",
-                                        "screenshot",
-                                        "cursor_position",
-                                        "scroll_up",
-                                        "scroll_down",
-                                    ],
-                                    "description": "指定要执行的计算机交互动作类型。每个动作对应特定的输入/输出设备交互。"
-                                },
-                                "text": {
-                                    "type": "string",
-                                    "description": "键盘输入动作（'key'或'type'）需要此参数。Windows键使用'win'。"
-                                },
-                                "coordinate": {
-                                    "type": "array",
-                                    "prefixItems": [
-                                        { "type": "number" },
-                                        { "type": "number" },
-                                    ],
-                                    "items": { "type": "number" },
-                                    "description": "鼠标相关动作需要此参数。指定屏幕上的x,y坐标用于鼠标移动、点击或拖动操作。"
-                                },
-                                "scroll_amount": {
-                                    "type": "integer",
-                                    "minimum": 1,
-                                    "description": "scroll_up和scroll_down动作的可选参数。指定滚动量。必须是正整数。默认为400。滚动方向由动作类型决定。"
-                                },
-                                "repeat": {
-                                    "type": "integer",
-                                    "minimum": 1,
-                                    "description": "所有动作的可选参数。指定重复执行动作的次数。默认为1。可用于重复按键、点击、滚动等任何动作。"
-                                }
-                            },
-                            "required": ["action"]
-                        }
-                    }
-                },{
-                    "type": "function",
-                    "function": {
-                        "name": "bash",
-                        "description": "一个Windows命令执行工具，维护持久的cmd.exe会话。支持自动超时控制的命令执行，对无输出命令具有截图能力。",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "command": {
-                                    "type": "string",
-                                    "description": "在持久的cmd.exe会话中执行的Windows命令。命令在120秒后超时。"
-                                },
-                                "restart": {
-                                    "type": "boolean",
-                                    "description": "可选参数，用于重启cmd.exe会话。当会话无响应或超时时使用。"
-                                }
+                tool_definitions = []
+                for tool_name in ToolFactory._tools:
+                    tool = ToolFactory.create(tool_name)
+                    # 从工具类中获取参数定义
+                    if hasattr(tool, "parameters_schema"):
+                        tool_def = {
+                            "type": "function",
+                            "function": {
+                                "name": tool.name,
+                                "description": tool.__class__.__doc__.strip(),
+                                "parameters": tool.parameters_schema
                             }
                         }
-                    }
-                },{
-                    "type": "function",
-                    "function": {
-                        "name": "str_replace_editor",
-                        "description": "一个强大的文件编辑工具，支持查看、创建、编辑和管理文件内容，具有历史记录跟踪功能。",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "command": {
-                                    "type": "string",
-                                    "enum": ["view", "create", "str_replace", "insert", "undo_edit"],
-                                    "description": "要执行的编辑命令：view（显示文件内容），create（创建新文件），str_replace（替换文本），insert（在行插入），undo_edit（撤销最后更改）"
-                                },
-                                "path": {
-                                    "type": "string",
-                                    "description": "要操作的文件的绝对路径"
-                                },
-                                "file_text": {
-                                    "type": "string",
-                                    "description": "'create'命令需要此参数。要写入新文件的内容。"
-                                },
-                                "view_range": {
-                                    "type": "array",
-                                    "items": {"type": "integer"},
-                                    "minItems": 2,
-                                    "maxItems": 2,
-                                    "description": "'view'命令的可选参数。指定要查看的起始和结束行号[start, end]。使用-1表示查看到最后一行。"
-                                },
-                                "old_str": {
-                                    "type": "string",
-                                    "description": "'str_replace'命令需要此参数。要替换的字符串。"
-                                },
-                                "new_str": {
-                                    "type": "string",
-                                    "description": "'str_replace'和'insert'命令需要此参数。要插入或替换的新字符串。"
-                                },
-                                "insert_line": {
-                                    "type": "integer",
-                                    "description": "'insert'命令需要此参数。要插入新内容的行号。"
-                                }
-                            },
-                            "required": ["command", "path"]
-                        }
-                    }
-                }]
+                        tool_definitions.append(tool_def)
+                return tool_definitions

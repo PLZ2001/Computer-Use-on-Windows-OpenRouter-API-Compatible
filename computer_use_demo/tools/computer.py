@@ -155,9 +155,57 @@ class IconDetector:
 
 @ToolFactory.register
 class ComputerTool(BaseTool):
-    """计算机交互工具"""
+    """一个全面的工具，支持与计算机输入/输出设备交互，包括屏幕、键盘和鼠标。支持输入、点击、滚动和截图等操作。可以模拟各种用户操作，如键盘输入、鼠标移动、点击和拖拽，并能够获取屏幕截图和光标位置。"""
 
     name: Literal["computer"] = "computer"
+    
+    parameters_schema = {
+        "type": "object",
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": [
+                    "key",
+                    "type",
+                    "mouse_move",
+                    "left_click",
+                    "left_click_drag",
+                    "right_click",
+                    "middle_click",
+                    "double_click",
+                    "screenshot",
+                    "cursor_position",
+                    "scroll_up",
+                    "scroll_down",
+                ],
+                "description": "指定要执行的计算机交互动作类型。每个动作对应特定的输入/输出设备交互。"
+            },
+            "text": {
+                "type": "string",
+                "description": "键盘输入动作（'key'或'type'）需要此参数。Windows键使用'win'。"
+            },
+            "coordinate": {
+                "type": "array",
+                "prefixItems": [
+                    { "type": "number" },
+                    { "type": "number" },
+                ],
+                "items": { "type": "number" },
+                "description": "鼠标相关动作需要此参数。指定屏幕上的x,y坐标用于鼠标移动、点击或拖动操作。"
+            },
+            "scroll_amount": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "scroll_up和scroll_down动作的可选参数。指定滚动量。必须是正整数。默认为400。滚动方向由动作类型决定。"
+            },
+            "repeat": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "所有动作的可选参数。指定重复执行动作的次数。默认为1。可用于重复按键、点击、滚动等任何动作。"
+            }
+        },
+        "required": ["action"]
+    }
 
     def __init__(self):
         super().__init__()

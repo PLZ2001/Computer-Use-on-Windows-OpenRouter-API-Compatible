@@ -24,7 +24,7 @@ SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITIES>
   - 日期: {datetime.today().strftime('%A, %B %d, %Y')}
 
 * 工具使用最佳实践:
-  - 优先使用'bash'而不是'computer'
+  - 优先使用'command'而不是'computer'
   - 尽可能一次调用多个函数/工具以提高效率
   - 在上下文不清晰时获取截图
   - 考虑函数/工具执行延迟

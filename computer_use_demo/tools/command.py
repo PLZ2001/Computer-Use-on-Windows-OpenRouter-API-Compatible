@@ -38,9 +38,21 @@ class CLIResult:
 
 @ToolFactory.register
 class CommandTool(BaseTool):
-    """命令执行工具"""
+    """Windows命令执行工具。通过cmd.exe执行单次命令，捕获命令的标准输出和错误输出。
+    当命令没有标准输出时，会自动获取屏幕截图作为结果。每次执行都是独立的进程。"""
 
-    name: Literal["bash"] = "bash"
+    name: Literal["command"] = "command"
+    
+    parameters_schema = {
+        "type": "object",
+        "properties": {
+            "command": {
+                "type": "string",
+                "description": "要执行的Windows命令"
+            }
+        },
+        "required": ["command"]
+    }
 
     def __init__(self):
         super().__init__()

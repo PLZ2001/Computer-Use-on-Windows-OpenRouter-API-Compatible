@@ -13,7 +13,7 @@ import anyio
 
 from .config import Config
 from .loop import APIProvider, sampling_loop
-from .tools import ToolResult, ToolCollection, ComputerTool, CommandTool, EditTool
+from .tools import ToolResult
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -52,12 +52,6 @@ class StreamlitUI:
             st.session_state.messages = []
         if "tools" not in st.session_state:
             st.session_state.tools = {}
-        if "tool_collection" not in st.session_state:
-            st.session_state.tool_collection = ToolCollection(
-                ComputerTool(),
-                CommandTool(),
-                EditTool(),
-            )
         if "api_key" not in st.session_state:
             st.session_state.api_key = os.getenv("OPENROUTER_API_KEY", "")
         if "base_url" not in st.session_state:

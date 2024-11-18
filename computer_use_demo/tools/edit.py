@@ -77,9 +77,48 @@ class FileManager:
 
 @ToolFactory.register
 class EditTool(BaseTool):
-    """增强的文件编辑工具"""
+    """一个强大的文件编辑工具，支持查看、创建、编辑和管理文件内容，具有历史记录跟踪功能。提供多种编辑操作，包括文本替换、行插入和编辑撤销。支持查看文件内容时的行号范围控制，并在编辑操作后显示上下文。所有编辑操作都可以通过撤销功能恢复到之前的状态。"""
 
-    name: Literal["str_replace_editor"] = "str_replace_editor"
+    name: Literal["edit"] = "edit"
+    
+    parameters_schema = {
+        "type": "object",
+        "properties": {
+            "command": {
+                "type": "string",
+                "enum": ["view", "create", "str_replace", "insert", "undo_edit"],
+                "description": "要执行的编辑命令：view（显示文件内容），create（创建新文件），str_replace（替换文本），insert（在行插入），undo_edit（撤销最后更改）"
+            },
+            "path": {
+                "type": "string",
+                "description": "要操作的文件的绝对路径"
+            },
+            "file_text": {
+                "type": "string",
+                "description": "'create'命令需要此参数。要写入新文件的内容。"
+            },
+            "view_range": {
+                "type": "array",
+                "items": {"type": "integer"},
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "'view'命令的可选参数。指定要查看的起始和结束行号[start, end]。使用-1表示查看到最后一行。"
+            },
+            "old_str": {
+                "type": "string",
+                "description": "'str_replace'命令需要此参数。要替换的字符串。"
+            },
+            "new_str": {
+                "type": "string",
+                "description": "'str_replace'和'insert'命令需要此参数。要插入或替换的新字符串。"
+            },
+            "insert_line": {
+                "type": "integer",
+                "description": "'insert'命令需要此参数。要插入新内容的行号。"
+            }
+        },
+        "required": ["command", "path"]
+    }
 
     def __init__(self):
         super().__init__()
