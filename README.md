@@ -31,6 +31,10 @@
 1. 推荐：`anthropic/claude-3.5-sonnet:beta`
 2. 能用，但不推荐：`anthropic/claude-3-5-haiku`、`openai/gpt-4o`、`openai/gpt-4o-mini`、`google/gemini-pro-1.5`、`google/gemini-flash-1.5`
 
+## 主界面预览
+
+![主界面预览](主界面.png)
+
 ## 使用说明
 
 1. 启动应用程序后，在浏览器中打开 http://localhost:8501
