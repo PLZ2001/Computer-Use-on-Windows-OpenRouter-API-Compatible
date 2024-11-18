@@ -1,19 +1,44 @@
-"""Command execution tool."""
+"""命令执行工具"""
 
 import asyncio
+import concurrent.futures
 import logging
 import os
 import subprocess
-import concurrent.futures
-from typing import Literal
+from dataclasses import dataclass
+from typing import Literal, Optional
 
-from .base import BaseAnthropicTool, CLIResult, ToolResult
+from .base import BaseTool, ToolResult, ToolFactory
 from .computer import ComputerTool
+from .exceptions import ExecutionError, ValidationError
 
 logger = logging.getLogger(__name__)
 
-class CommandTool(BaseAnthropicTool):
-    """Tool for executing shell commands."""
+@dataclass
+class CLIResult:
+    """命令行执行结果"""
+    returncode: int
+    stdout: str
+    stderr: str
+
+    def __str__(self) -> str:
+        return f"CLIResult(returncode={self.returncode}, stdout={self.stdout}, stderr={self.stderr})"
+
+    def replace(self, **kwargs) -> 'CLIResult':
+        """创建一个新的CLIResult，替换部分字段"""
+        return CLIResult(
+            returncode=kwargs.get('returncode', self.returncode),
+            stdout=kwargs.get('stdout', self.stdout),
+            stderr=kwargs.get('stderr', self.stderr)
+        )
+
+    def is_success(self) -> bool:
+        """检查命令是否执行成功"""
+        return self.returncode == 0
+
+@ToolFactory.register
+class CommandTool(BaseTool):
+    """命令执行工具"""
 
     name: Literal["bash"] = "bash"
 
@@ -21,18 +46,20 @@ class CommandTool(BaseAnthropicTool):
         super().__init__()
         self.computer = ComputerTool()
 
-    async def __call__(
+    async def validate_params(self, **kwargs) -> None:
+        """验证参数"""
+        if not kwargs.get("command"):
+            raise ValidationError("未提供命令")
+
+    async def execute(
         self,
         *,
-        command: str | None = None,
+        command: Optional[str] = None,
         **kwargs,
     ) -> ToolResult:
-        """Execute a shell command."""
-        if not command:
-            return ToolResult(error="No command provided")
-
+        """执行命令"""
         try:
-            logger.info(f"Executing command: {command}")
+            self.logger.info(f"执行命令: {command}")
             
             # 使用线程池执行同步的subprocess调用
             loop = asyncio.get_event_loop()
@@ -57,29 +84,26 @@ class CommandTool(BaseAnthropicTool):
                     )
                 )
 
-            stdout_str = process_result.stdout
-            stderr_str = process_result.stderr
-            
-            logger.debug(f"Command output - stdout: {stdout_str}, stderr: {stderr_str}")
-            
             result = CLIResult(
                 returncode=process_result.returncode,
-                stdout=stdout_str,
-                stderr=stderr_str
+                stdout=process_result.stdout,
+                stderr=process_result.stderr
             )
 
-            if result.returncode != 0:
-                error_msg = f"Command failed with code {result.returncode}\n{result.stderr}"
-                logger.error(error_msg)
+            self.logger.debug(f"命令输出 - stdout: {result.stdout}, stderr: {result.stderr}")
+
+            if not result.is_success():
+                error_msg = f"命令执行失败，返回码 {result.returncode}\n{result.stderr}"
+                self.logger.error(error_msg)
                 return ToolResult(error=error_msg)
 
             # 如果没有stdout输出，返回截图
-            if not stdout_str.strip():
+            if not result.stdout.strip():
                 return await self.computer.take_screenshot()
 
-            return ToolResult(output=stdout_str)
+            return ToolResult(output=result.stdout)
 
         except Exception as e:
-            error_msg = f"Command execution failed: {str(e)}"
-            logger.error(error_msg, exc_info=True)
-            return ToolResult(error=error_msg)
+            error_msg = f"命令执行失败: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            raise ExecutionError(error_msg)

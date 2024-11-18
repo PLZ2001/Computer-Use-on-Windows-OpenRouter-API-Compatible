@@ -1,17 +1,40 @@
-"""Tool implementations for computer use."""
+"""工具包初始化模块"""
 
-from .base import BaseAnthropicTool, CLIResult, ToolError, ToolResult, ToolCollection
-from .computer import ComputerTool
+from .base import (
+    BaseTool,
+    ToolResult,
+    ToolCollection,
+    ToolFactory
+)
 from .command import CommandTool
+from .computer import ComputerTool
 from .edit import EditTool
+from .exceptions import (
+    ToolError,
+    ValidationError,
+    ExecutionError,
+    FileOperationError,
+    APIError,
+    ConfigurationError
+)
 
 __all__ = [
-    'BaseAnthropicTool',
-    'CLIResult',
-    'ToolError',
+    # 基础类
+    'BaseTool',
     'ToolResult',
     'ToolCollection',
-    'ComputerTool',
+    'ToolFactory',
+    
+    # 工具类
     'CommandTool',
-    'EditTool'
+    'ComputerTool',
+    'EditTool',
+    
+    # 异常类
+    'ToolError',
+    'ValidationError',
+    'ExecutionError',
+    'FileOperationError',
+    'APIError',
+    'ConfigurationError'
 ]

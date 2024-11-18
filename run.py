@@ -1,7 +1,7 @@
-"""Launcher script for the Streamlit app."""
+"""启动Streamlit应用程序的脚本"""
 
-import asyncio
+import anyio
 from computer_use_demo.streamlit import main
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    anyio.run(main, backend="asyncio")

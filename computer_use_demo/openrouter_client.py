@@ -1,275 +1,192 @@
-"""
-Client for interacting with Openrouter API.
-"""
+"""OpenRouter API客户端模块"""
+
 import json
-from typing import TypedDict, List, Dict, Any, Optional
+import logging
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
+from .config import Config
+from .tools.exceptions import APIError
+
+logger = logging.getLogger(__name__)
+
 class OpenrouterResponse:
-    """Wrapper for Openrouter API response to match interface."""
-    def __init__(self, message, http_response: httpx.Response):
+    """OpenRouter API响应包装器"""
+    
+    def __init__(self, message: Dict[str, Any], http_response: httpx.Response):
         self.message = message
         self.http_response = http_response
 
-    def parse(self):
+    def parse(self) -> Dict[str, Any]:
+        """解析响应消息"""
         return self.message
 
 class OpenrouterClient:
-    """Client for interacting with Openrouter API."""
+    """OpenRouter API客户端"""
         
-    def __init__(self, base_url: str = None, api_key: str = None, model: str = None):
+    def __init__(
+        self,
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None
+    ):
+        """
+        初始化OpenRouter客户端。
+        
+        Args:
+            base_url: API基础URL
+            api_key: API密钥
+            model: 模型名称
+        """
         self.base_url = base_url
         self.api_key = api_key
         self.model = model
-        # Initialize beta property immediately
         self.beta = self.Beta(self)
         self._initialized = False
+        self.config = Config.get_instance()
         
-    async def initialize(self):
-        """Initialize the client by testing the connection to Openrouter"""
+    async def initialize(self) -> 'OpenrouterClient':
+        """
+        初始化客户端并测试连接。
+        
+        Returns:
+            初始化后的客户端实例
+            
+        Raises:
+            RuntimeError: 连接失败时抛出
+        """
         try:
-            async with httpx.AsyncClient() as async_client:
-                response = await async_client.get(f"{self.base_url}/models")
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{self.base_url}/models")
                 response.raise_for_status()
             self._initialized = True
             return self
         except Exception as e:
-            raise RuntimeError(f"Failed to connect to Openrouter: {e}")
+            raise RuntimeError(f"连接OpenRouter失败: {e}")
             
-        
     class Beta:
-        def __init__(self, client):
+        """Beta API接口"""
+        
+        def __init__(self, client: 'OpenrouterClient'):
             self.client = client
             self.messages = self.Messages(client)
             
         class Messages:
-            def __init__(self, client):
+            """消息相关API"""
+            
+            def __init__(self, client: 'OpenrouterClient'):
                 self.client = client
                 
-            def with_raw_response(self):
-                """Method chaining to match interface"""
+            def with_raw_response(self) -> 'OpenrouterClient.Beta.Messages':
+                """方法链式调用"""
                 return self
                 
             async def create(
                 self,
                 max_tokens: int,
-                messages: list[dict],
-                system: list[dict],
-            ) -> OpenrouterResponse:
+                messages: List[Dict[str, Any]],
+                system: List[Dict[str, Any]],
+            ) -> Tuple[OpenrouterResponse, Dict[str, Any]]:
                 """
-                Create a chat completion with Openrouter API.
+                创建聊天完成。
                 
                 Args:
-                    max_tokens: Maximum tokens to generate
-                    messages: Chat history in the format [{"role": str, "content": str}]
-                    model: Model name to use (must be one of the supported models)
-                    system: System messages in the format [{"text": str}]
-                    tools: List of available tools (currently not used by Openrouter)
-                    betas: List of beta features to enable (currently not used by Openrouter)
+                    max_tokens: 最大生成令牌数
+                    messages: 聊天历史
+                    system: 系统消息
                     
                 Returns:
-                    OpenrouterResponse: Wrapper containing both the HTTP response and parsed Message
+                    OpenrouterResponse和解析后的消息
                     
                 Raises:
-                    ValueError: If the model is not supported or if the input format is invalid
-                    RuntimeError: If connection or model loading fails
+                    ValueError: 输入格式无效时抛出
+                    RuntimeError: 连接或模型加载失败时抛出
                 """
-                # Validate input parameters
+                # 验证输入参数
                 if not messages or not isinstance(messages, list):
-                    raise ValueError("Messages must be a non-empty list")
+                    raise ValueError("messages必须是非空列表")
                 
                 for msg in messages:
                     if not isinstance(msg, dict) or "role" not in msg or "content" not in msg:
-                        raise ValueError("Each message must be a dict with 'role' and 'content' keys")
+                        raise ValueError("每条消息必须是包含'role'和'content'键的字典")
                     if msg["role"] not in ["user", "assistant", "system", "tool"]:
-                        raise ValueError(f"Invalid message role: {msg['role']}")
+                        raise ValueError(f"无效的消息角色: {msg['role']}")
                 
                 if not self.client.model:
-                    raise ValueError("Model name is required")
+                    raise ValueError("需要提供模型名称")
                                 
-                # Convert messages to Openrouter format
+                # 转换为OpenRouter格式
                 openrouter_messages = [{
                     "role": "system",
                     "content": system
                 }]
+                openrouter_messages.extend(messages)
                 
-                for msg in messages:
-                    openrouter_messages.append(msg)
-                
-                # Prepare Openrouter request
+                # 准备请求数据
                 request_data = {
                     "model": self.client.model,
                     "messages": openrouter_messages,
                     "stream": False,
                     "max_tokens": max_tokens,
-                    "tools": [{
-                        "type": "function",
-                        "function": {
-                            "name": "computer",
-                            "description": "A comprehensive tool that enables interaction with computer input/output devices including screen, keyboard, and mouse. It supports various operations like typing, clicking, scrolling and taking screenshots.",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "action": {
-                                        "type": "string",
-                                        "enum": [
-                                            "key",
-                                            "type",
-                                            "mouse_move",
-                                            "left_click",
-                                            "left_click_drag",
-                                            "right_click",
-                                            "middle_click",
-                                            "double_click",
-                                            "screenshot",
-                                            "cursor_position",
-                                            "scroll_up",
-                                            "scroll_down",
-                                        ],
-                                        "description": "Specifies the type of action to perform on the computer. Each action corresponds to a specific interaction with the input/output devices."
-                                    },
-                                    "text": {
-                                        "type": "string",
-                                        "description": "Required for keyboard input actions ('key' or 'type'). For Windows key, use 'win'."
-                                    },
-                                    "coordinate": {
-                                        "type": "array",
-                                        "prefixItems": [
-                                            { "type": "number" },
-                                            { "type": "number" },
-                                        ],
-                                        "items": { "type": "number" },
-                                        "description": "Required for mouse-related actions. Specifies the x,y coordinates on screen for mouse movement, clicking, or dragging operations."
-                                    },
-                                    "scroll_amount": {
-                                        "type": "integer",
-                                        "minimum": 1,
-                                        "description": "Optional for scroll_up and scroll_down actions. Specifies the amount to scroll. Must be a positive integer. Default is 400. The direction is determined by the action type (scroll_up or scroll_down)."
-                                    },
-                                    "repeat": {
-                                        "type": "integer",
-                                        "minimum": 1,
-                                        "description": "Optional for all actions. Specifies how many times to repeat the action. Default is 1. For example, can be used to repeat key presses, mouse clicks, scrolling, or any other action multiple times."
-                                    }
-                                },
-                                "required": [
-                                    "action"
-                                ]
-                            }
-                        }
-                    },{
-                        "type": "function",
-                        "function": {
-                            "name": "bash",
-                            "description": "A Windows command execution tool that maintains a persistent cmd.exe session. Supports command execution with automatic timeout control and screenshot capability for commands without output.",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "command": {
-                                        "type": "string",
-                                        "description": "The Windows command to execute in the persistent cmd.exe session. Commands timeout after 120 seconds."
-                                    },
-                                    "restart": {
-                                        "type": "boolean",
-                                        "description": "Optional parameter to restart the cmd.exe session. Use this if the session becomes unresponsive or times out."
-                                    }
-                                }
-                            }
-                        }
-                    },{
-                        "type": "function",
-                        "function": {
-                            "name": "str_replace_editor",
-                            "description": "A powerful file editing tool that supports viewing, creating, editing, and managing file content with history tracking.",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "command": {
-                                        "type": "string",
-                                        "enum": ["view", "create", "str_replace", "insert", "undo_edit"],
-                                        "description": "The editing command to perform: view (show file content), create (create new file), str_replace (replace text), insert (insert at line), undo_edit (revert last change)"
-                                    },
-                                    "path": {
-                                        "type": "string",
-                                        "description": "The absolute path of the file to operate on"
-                                    },
-                                    "file_text": {
-                                        "type": "string",
-                                        "description": "Required for 'create' command. The content to write to the new file."
-                                    },
-                                    "view_range": {
-                                        "type": "array",
-                                        "items": {"type": "integer"},
-                                        "minItems": 2,
-                                        "maxItems": 2,
-                                        "description": "Optional for 'view' command. Specify start and end line numbers to view [start, end]. Use -1 for end to view until the last line."
-                                    },
-                                    "old_str": {
-                                        "type": "string",
-                                        "description": "Required for 'str_replace' command. The string to be replaced."
-                                    },
-                                    "new_str": {
-                                        "type": "string",
-                                        "description": "Required for 'str_replace' and 'insert' commands. The new string to insert or replace with."
-                                    },
-                                    "insert_line": {
-                                        "type": "integer",
-                                        "description": "Required for 'insert' command. The line number where the new content should be inserted."
-                                    }
-                                },
-                                "required": ["command", "path"]
-                            }
-                        }
-                    }],
+                    "tools": self._get_tool_definitions()
                 }
+
                 try:
-                    # Make request to Openrouter API asynchronously
-                    async_client = httpx.AsyncClient(base_url=self.client.base_url, timeout=60.0)
+                    # 异步请求OpenRouter API
+                    async_client = httpx.AsyncClient(
+                        base_url=self.client.base_url,
+                        timeout=self.client.config.api.REQUEST_TIMEOUT
+                    )
                     try:
                         http_response = await async_client.post(
                             "/chat/completions",
-                            headers={
-                            "Authorization": f"Bearer {self.client.api_key}"},
-                            data=json.dumps(request_data)
+                            headers={"Authorization": f"Bearer {self.client.api_key}"},
+                            json=request_data
                         )
                         http_response.raise_for_status()
                     except httpx.TimeoutException as e:
-                        raise RuntimeError(f"Request to Openrouter timed out: {e}")
+                        raise APIError(f"OpenRouter请求超时: {e}")
                     except httpx.RequestError as e:
-                        raise RuntimeError(f"Failed to connect to Openrouter: {e}")
+                        raise APIError(f"连接OpenRouter失败: {e}")
                     except httpx.HTTPStatusError as e:
-                        raise RuntimeError(f"Openrouter API returned error {e.response.status_code}: {e.response.text}")
+                        raise APIError(f"OpenRouter API返回错误 {e.response.status_code}: {e.response.text}")
                 
                     try:
-                        # Convert Openrouter response to Message format
+                        # 解析OpenRouter响应
                         openrouter_response = http_response.json()
-                        print(openrouter_response)
+                        logger.debug(f"OpenRouter响应: {openrouter_response}")
                     except ValueError as e:
-                        raise ValueError(f"Invalid JSON response from Openrouter: {e}")
+                        raise ValueError(f"无效的JSON响应: {e}")
                 
                     if not isinstance(openrouter_response, dict):
-                        raise ValueError(f"Expected dict response, got {type(openrouter_response)}")
+                        raise ValueError(f"期望dict响应，得到 {type(openrouter_response)}")
                     
                     if "message" not in openrouter_response['choices'][0]:
-                        raise ValueError(f"Response missing 'message' field: {openrouter_response}")
+                        raise ValueError(f"响应缺少'message'字段: {openrouter_response}")
                         
                 except Exception as e:
-                    if isinstance(e, (ValueError, RuntimeError)):
+                    if isinstance(e, (ValueError, APIError)):
                         raise
-                    raise RuntimeError(f"Unexpected error while getting response from Openrouter: {e}")
+                    raise RuntimeError(f"从OpenRouter获取响应时发生意外错误: {e}")
                 
+                # 构建响应内容
                 content = []
                 if openrouter_response['choices'][0]["message"]["content"] is not None:
-                    content.append({"type": "text", "text": openrouter_response['choices'][0]["message"]["content"]})
-                if 'tool_calls' in openrouter_response['choices'][0]['message'].keys():
+                    content.append({
+                        "type": "text",
+                        "text": openrouter_response['choices'][0]["message"]["content"]
+                    })
+                if 'tool_calls' in openrouter_response['choices'][0]['message']:
                     for item in openrouter_response['choices'][0]['message']['tool_calls']:
-                        content.append({"type": "tool_use", 
-                                        "name": item['function']['name'],
-                                        "input": json.loads(item['function']['arguments']),
-                                        'id': item['id']
+                        content.append({
+                            "type": "tool_use", 
+                            "name": item['function']['name'],
+                            "input": json.loads(item['function']['arguments']),
+                            'id': item['id']
                         })
-                # Create Message response
+
+                # 创建消息响应
                 message = {
                     "id": "msg_" + http_response.headers.get("X-Request-ID", "unknown"),
                     "type": "message",
@@ -285,3 +202,123 @@ class OpenrouterClient:
                 }
                 
                 return OpenrouterResponse(message, http_response), openrouter_response['choices'][0]['message']
+
+            def _get_tool_definitions(self) -> List[Dict[str, Any]]:
+                """获取工具定义"""
+                return [{
+                    "type": "function",
+                    "function": {
+                        "name": "computer",
+                        "description": "一个全面的工具，支持与计算机输入/输出设备交互，包括屏幕、键盘和鼠标。支持输入、点击、滚动和截图等操作。",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "action": {
+                                    "type": "string",
+                                    "enum": [
+                                        "key",
+                                        "type",
+                                        "mouse_move",
+                                        "left_click",
+                                        "left_click_drag",
+                                        "right_click",
+                                        "middle_click",
+                                        "double_click",
+                                        "screenshot",
+                                        "cursor_position",
+                                        "scroll_up",
+                                        "scroll_down",
+                                    ],
+                                    "description": "指定要执行的计算机交互动作类型。每个动作对应特定的输入/输出设备交互。"
+                                },
+                                "text": {
+                                    "type": "string",
+                                    "description": "键盘输入动作（'key'或'type'）需要此参数。Windows键使用'win'。"
+                                },
+                                "coordinate": {
+                                    "type": "array",
+                                    "prefixItems": [
+                                        { "type": "number" },
+                                        { "type": "number" },
+                                    ],
+                                    "items": { "type": "number" },
+                                    "description": "鼠标相关动作需要此参数。指定屏幕上的x,y坐标用于鼠标移动、点击或拖动操作。"
+                                },
+                                "scroll_amount": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "description": "scroll_up和scroll_down动作的可选参数。指定滚动量。必须是正整数。默认为400。滚动方向由动作类型决定。"
+                                },
+                                "repeat": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "description": "所有动作的可选参数。指定重复执行动作的次数。默认为1。可用于重复按键、点击、滚动等任何动作。"
+                                }
+                            },
+                            "required": ["action"]
+                        }
+                    }
+                },{
+                    "type": "function",
+                    "function": {
+                        "name": "bash",
+                        "description": "一个Windows命令执行工具，维护持久的cmd.exe会话。支持自动超时控制的命令执行，对无输出命令具有截图能力。",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "command": {
+                                    "type": "string",
+                                    "description": "在持久的cmd.exe会话中执行的Windows命令。命令在120秒后超时。"
+                                },
+                                "restart": {
+                                    "type": "boolean",
+                                    "description": "可选参数，用于重启cmd.exe会话。当会话无响应或超时时使用。"
+                                }
+                            }
+                        }
+                    }
+                },{
+                    "type": "function",
+                    "function": {
+                        "name": "str_replace_editor",
+                        "description": "一个强大的文件编辑工具，支持查看、创建、编辑和管理文件内容，具有历史记录跟踪功能。",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "command": {
+                                    "type": "string",
+                                    "enum": ["view", "create", "str_replace", "insert", "undo_edit"],
+                                    "description": "要执行的编辑命令：view（显示文件内容），create（创建新文件），str_replace（替换文本），insert（在行插入），undo_edit（撤销最后更改）"
+                                },
+                                "path": {
+                                    "type": "string",
+                                    "description": "要操作的文件的绝对路径"
+                                },
+                                "file_text": {
+                                    "type": "string",
+                                    "description": "'create'命令需要此参数。要写入新文件的内容。"
+                                },
+                                "view_range": {
+                                    "type": "array",
+                                    "items": {"type": "integer"},
+                                    "minItems": 2,
+                                    "maxItems": 2,
+                                    "description": "'view'命令的可选参数。指定要查看的起始和结束行号[start, end]。使用-1表示查看到最后一行。"
+                                },
+                                "old_str": {
+                                    "type": "string",
+                                    "description": "'str_replace'命令需要此参数。要替换的字符串。"
+                                },
+                                "new_str": {
+                                    "type": "string",
+                                    "description": "'str_replace'和'insert'命令需要此参数。要插入或替换的新字符串。"
+                                },
+                                "insert_line": {
+                                    "type": "integer",
+                                    "description": "'insert'命令需要此参数。要插入新内容的行号。"
+                                }
+                            },
+                            "required": ["command", "path"]
+                        }
+                    }
+                }]

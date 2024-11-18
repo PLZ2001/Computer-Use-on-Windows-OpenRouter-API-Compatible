@@ -1,97 +1,155 @@
-"""
-Entrypoint for streamlit, see https://docs.streamlit.io/
-"""
+"""Streamlit Web界面模块"""
 
-import asyncio
 import base64
+import json
+import logging
 import os
-import traceback
-from datetime import datetime
-from enum import StrEnum
-from functools import partial
-from typing import Dict, Any
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
 
-import httpx
 import streamlit as st
-from streamlit.delta_generator import DeltaGenerator
+from dotenv import load_dotenv
+import anyio
 
-from computer_use_demo.loop import (
-    APIProvider,
-    sampling_loop,
-)
-from computer_use_demo.tools import ToolResult
+from .config import Config
+from .loop import APIProvider, sampling_loop
+from .tools import ToolResult, ToolCollection, ComputerTool, CommandTool, EditTool
 
-STREAMLIT_STYLE = """
-<style>
-    /* Hide chat input while agent loop is running */
-    .stApp[data-teststate=running] .stChatInput textarea,
-    .stApp[data-test-script-state=running] .stChatInput textarea {
-        display: none;
-    }
-     /* Hide the streamlit deploy button */
-    .stDeployButton {
-        visibility: hidden;
-    }
-</style>
-"""
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-class Sender(StrEnum):
+# 加载环境变量
+load_dotenv()
+
+class Sender(str, Enum):
+    """消息发送者类型"""
     USER = "user"
     BOT = "assistant"
     TOOL = "tool"
 
-def setup_state():
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    if "api_key" not in st.session_state:
-        st.session_state.api_key = os.getenv("OPENROUTER_API_KEY", "")
-    if "base_url" not in st.session_state:
-        st.session_state.base_url = os.getenv("OPENROUTER_BASE_URL", "")
-    if "model" not in st.session_state:
-        st.session_state.model = os.getenv("OPENROUTER_MODEL", "")
-    if "provider" not in st.session_state:
-        st.session_state.provider = APIProvider.OPENROUTER.value
-    if "provider_radio" not in st.session_state:
-        st.session_state.provider_radio = st.session_state.provider
-    if "responses" not in st.session_state:
-        st.session_state.responses = {}
-    if "tools" not in st.session_state:
-        st.session_state.tools = {}
-    if "only_n_most_recent_images" not in st.session_state:
-        st.session_state.only_n_most_recent_images = 10
-    if "custom_system_prompt" not in st.session_state:
-        st.session_state.custom_system_prompt = "Speak in Chinese."
-    if "hide_images" not in st.session_state:
-        st.session_state.hide_images = False
+class StreamlitUI:
+    """Streamlit用户界面管理器"""
 
+    def __init__(self):
+        """初始化UI管理器"""
+        self.config = Config.get_instance()
+        self.setup_page()
+        self.initialize_session_state()
 
-async def main():
-    """Render loop for streamlit"""
-    setup_state()
-
-    st.markdown(STREAMLIT_STYLE, unsafe_allow_html=True)
-
-    st.title("让AI控制你的电脑")
-
-    with st.sidebar:
-        st.text_area(
-            "模型名称",
-            key="model",
-            help="选择OpenRouter的模型",
-        )
-        st.text_area(
-            "自定义系统提示",
-            key="custom_system_prompt",
-            help="添加至系统提示的额外指令",
+    def setup_page(self):
+        """设置页面配置"""
+        st.set_page_config(
+            page_title="计算机控制助手",
+            page_icon="🖥️",
+            layout="wide",
+            initial_sidebar_state="expanded"
         )
 
-    chat, http_logs = st.tabs(["对话", "HTTP日志"])
-    new_message = st.chat_input(
-        "给AI发送消息以控制你的电脑..."
-    )
+    def initialize_session_state(self):
+        """初始化会话状态"""
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+        if "tools" not in st.session_state:
+            st.session_state.tools = {}
+        if "tool_collection" not in st.session_state:
+            st.session_state.tool_collection = ToolCollection(
+                ComputerTool(),
+                CommandTool(),
+                EditTool(),
+            )
+        if "api_key" not in st.session_state:
+            st.session_state.api_key = os.getenv("OPENROUTER_API_KEY", "")
+        if "base_url" not in st.session_state:
+            st.session_state.base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+        if "model" not in st.session_state:
+            st.session_state.model = os.getenv("OPENROUTER_MODEL", "anthropic/claude-2")
+        if "hide_images" not in st.session_state:
+            st.session_state.hide_images = False
+        if "response_container" not in st.session_state:
+            st.session_state.response_container = None
+        if "message_history_container" not in st.session_state:
+            st.session_state.message_history_container = None
 
-    with chat:
-        # render past chats
+    def render_sidebar(self):
+        """渲染侧边栏"""
+        with st.sidebar:
+            st.title("⚙️ 设置")
+            st.header("API配置")
+            st.session_state.api_key = st.text_input(
+                "API密钥",
+                value=st.session_state.api_key,
+                type="password"
+            )
+            st.session_state.base_url = st.text_input(
+                "API基础URL",
+                value=st.session_state.base_url
+            )
+            st.session_state.model = st.text_input(
+                "模型名称",
+                value=st.session_state.model
+            )
+            
+            # 工具设置
+            st.header("工具配置")
+            st.number_input(
+                "截图延迟(秒)",
+                min_value=0.1,
+                max_value=5.0,
+                value=self.config.display.SCREENSHOT_DELAY,
+                step=0.1,
+                key="screenshot_delay"
+            )
+            st.number_input(
+                "最大图片大小(MB)",
+                min_value=0.1,
+                max_value=10.0,
+                value=self.config.display.MAX_IMAGE_SIZE / (1024 * 1024),
+                step=0.1,
+                key="max_image_size"
+            )
+            st.session_state.hide_images = st.checkbox(
+                "隐藏图片",
+                value=st.session_state.hide_images
+            )
+            
+            # 清除历史
+            if st.button("🗑️ 清除聊天历史"):
+                st.session_state.messages = []
+                st.session_state.tools = {}
+                st.rerun()
+
+    def _render_message(
+        self,
+        sender: Sender,
+        message: Union[str, Dict[str, Any], ToolResult],
+        container=None
+    ):
+        """渲染单条消息"""
+        if not message:
+            return
+            
+        chat_message = (container or st).chat_message(sender)
+        with chat_message:
+            if isinstance(message, ToolResult):
+                if message.output:
+                    st.code(message.output)
+                if message.error:
+                    st.error(message.error)
+                if message.base64_image and not st.session_state.hide_images:
+                    st.image(base64.b64decode(message.base64_image))
+            elif isinstance(message, dict):
+                if message.get("type") == "text":
+                    st.markdown(message.get("text", ""))
+                elif message.get("type") == "tool_use":
+                    st.code(f'使用工具: {message.get("name", "")}\n输入: {message.get("input", "")}')
+                elif message.get("type") == "error":
+                    st.error(message.get("text", ""))
+            else:
+                st.markdown(str(message))
+
+    def render_messages(self):
+        """渲染消息历史"""
         messages = st.session_state.messages
         for i, message in enumerate(messages):
             if isinstance(message, dict):
@@ -109,158 +167,143 @@ async def main():
                     # 处理工具执行结果
                     tool_call_id = message.get("tool_call_id", "")
                     if tool_call_id in st.session_state.tools:
-                        _render_message(
-                                    Sender.BOT,
-                                    {
-                                        "type": "tool_use",
-                                        "name": message.get("name", ""),
-                                        "input": next((call for call in messages[i-1]["tool_calls"] if call["id"] == tool_call_id), {}).get("function", {}).get("arguments", ""),
-                                    }
-                                )
-                        _render_message(Sender.TOOL, st.session_state.tools[tool_call_id])
+                        self._render_message(
+                            Sender.BOT,
+                            {
+                                "type": "tool_use",
+                                "name": message.get("name", ""),
+                                "input": next((call for call in messages[i-1]["tool_calls"] if call["id"] == tool_call_id), {}).get("function", {}).get("arguments", ""),
+                            }
+                        )
+                        self._render_message(Sender.TOOL, st.session_state.tools[tool_call_id])
                 elif isinstance(content, str):
-                    _render_message(role, content)
+                    self._render_message(role, content)
                 elif isinstance(content, list):
                     for block in content:
                         if isinstance(block, dict):
                             if block.get("type") == "tool_result":
                                 tool_id = block.get("tool_use_id", "")
                                 if tool_id in st.session_state.tools:
-                                    _render_message(
+                                    self._render_message(
                                         Sender.TOOL, 
                                         st.session_state.tools[tool_id]
                                     )
                             elif block.get("type") == "text":
-                                _render_message(role, block.get("text", ""))
+                                self._render_message(role, block.get("text", ""))
 
-        # render past http exchanges
-        for identity, (request, response) in st.session_state.responses.items():
-            _render_api_response(request, response, identity, http_logs)
+    async def handle_user_input(self):
+        """处理用户输入"""
+        if prompt := st.chat_input("输入你的指令..."):
+            st.chat_message("user").write(prompt)
+            st.session_state.messages.append({
+                "role": "user",
+                "content": prompt
+            })
+            
+            # 创建响应容器
+            st.session_state.response_container = st.container()
+            
+            await self.process_messages()
 
-        # handle new message
-        if new_message:
-            st.session_state.messages.append(
-                {
-                    "role": Sender.USER,
-                    "content": [{"type": "text", "text": new_message}],
-                }
-            )
-            _render_message(Sender.USER, new_message)
+    async def _run_sampling_loop(self):
+        """运行采样循环"""
+        def output_callback(content: Dict[str, Any]):
+            """输出回调"""
+            with st.session_state.response_container:
+                self._render_message(Sender.BOT, content)
 
-        try:
-            most_recent_message = st.session_state["messages"][-1]
-        except IndexError:
-            return
-
-        if most_recent_message["role"] is not Sender.USER:
-            # we don't have a user message to respond to, exit early
-            return
-
-        with st.spinner("正在运行..."):
-            # run the agent sampling loop with the newest message
-            st.session_state.messages = await sampling_loop(
-                system_prompt_suffix=st.session_state.custom_system_prompt,
-                provider=st.session_state.provider,
-                messages=st.session_state.messages,
-                output_callback=partial(_render_message, Sender.BOT),
-                tool_output_callback=partial(
-                    _tool_output_callback, tool_state=st.session_state.tools
-                ),
-                api_response_callback=partial(
-                    _api_response_callback,
-                    tab=http_logs,
-                    response_state=st.session_state.responses,
-                ),
-                api_key=st.session_state.api_key,
-                base_url=st.session_state.base_url,
-                model=st.session_state.model,
-                only_n_most_recent_images=st.session_state.only_n_most_recent_images,
-            )
-
-def _api_response_callback(
-    request: httpx.Request,
-    response: httpx.Response | object | None,
-    error: Exception | None,
-    tab: DeltaGenerator,
-    response_state: dict[str, tuple[httpx.Request, httpx.Response | object | None]],
-):
-    """
-    Handle an API response by storing it to state and rendering it.
-    """
-    response_id = datetime.now().isoformat()
-    response_state[response_id] = (request, response)
-    if error:
-        _render_error(error)
-    _render_api_response(request, response, response_id, tab)
-
-
-def _tool_output_callback(
-    tool_output: ToolResult, tool_id: str, tool_state: dict[str, ToolResult]
-):
-    """Handle a tool output by storing it to state and rendering it."""
-    tool_state[tool_id] = tool_output
-    _render_message(Sender.TOOL, tool_output)
-
-
-def _render_api_response(
-    request: httpx.Request,
-    response: httpx.Response | object | None,
-    response_id: str,
-    tab: DeltaGenerator,
-):
-    """Render an API response to a streamlit tab"""
-    with tab:
-        with st.expander(f"Request/Response ({response_id})"):
-            newline = "\n\n"
-            st.markdown(
-                f"`{request.method} {request.url}`{newline}{newline.join(f'`{k}: {v}`' for k, v in request.headers.items())}"
-            )
-            st.json(request.read().decode())
-            st.markdown("---")
-            if isinstance(response, httpx.Response):
-                st.markdown(
-                    f"`{response.status_code}`{newline}{newline.join(f'`{k}: {v}`' for k, v in response.headers.items())}"
-                )
-                st.json(response.text)
-            else:
-                st.write(response)
-
-
-def _render_error(error: Exception):
-    body = str(error)
-    body += "\n\n**Traceback:**"
-    lines = "\n".join(traceback.format_exception(error))
-    body += f"\n\n```{lines}```"
-    st.error(f"**{error.__class__.__name__}**\n\n{body}", icon=":material/error:")
-
-
-def _render_message(
-    sender: Sender,
-    message: str | Dict[str, Any] | ToolResult,
-):
-    """Convert input from the user or output from the agent to a streamlit message."""
-    if not message:
-        return
-        
-    with st.chat_message(sender):
-        if isinstance(message, ToolResult):
-            if message.output:
-                if message.__class__.__name__ == "CLIResult":
-                    st.code(message.output)
+        def tool_output_callback(result: ToolResult, tool_id: str):
+            """工具输出回调"""
+            # 缓存工具结果
+            st.session_state.tools[tool_id] = result
+            
+            with st.session_state.response_container:
+                if result.error:
+                    self._render_message(
+                        Sender.TOOL,
+                        {
+                            "type": "error",
+                            "text": f"工具执行错误 (ID: {tool_id}): {result.error}"
+                        }
+                    )
                 else:
-                    st.markdown(message.output)
-            if message.error:
-                st.error(message.error)
-            if message.base64_image and not st.session_state.hide_images:
-                st.image(base64.b64decode(message.base64_image))
-        elif isinstance(message, dict):
-            if message.get("type") == "text":
-                st.markdown(message.get("text", ""))
-            elif message.get("type") == "tool_use":
-                st.code(f'使用工具: {message.get("name", "")}\n输入: {message.get("input", "")}')
-        else:
-            st.markdown(str(message))
+                    if result.output or result.base64_image:
+                        self._render_message(
+                            Sender.TOOL,
+                            result
+                        )
 
+        def api_response_callback(request: Any, response: Optional[Any], error: Optional[Exception]):
+            """API响应回调"""
+            if error:
+                with st.session_state.response_container:
+                    self._render_message(
+                        Sender.BOT,
+                        {
+                            "type": "error",
+                            "text": f"API错误: {str(error)}"
+                        }
+                    )
+                    if response:
+                        self._render_message(
+                            Sender.BOT,
+                            response
+                        )
+
+        return await sampling_loop(
+            provider=APIProvider.OPENROUTER,
+            system_prompt_suffix="",
+            messages=st.session_state.messages,
+            output_callback=output_callback,
+            tool_output_callback=tool_output_callback,
+            api_response_callback=api_response_callback,
+            api_key=st.session_state.api_key,
+            base_url=st.session_state.base_url,
+            model=st.session_state.model
+        )
+
+    async def process_messages(self):
+        """处理消息并调用API"""
+        if not st.session_state.api_key:
+            st.error("请先配置API密钥")
+            return
+
+        with st.spinner("思考中..."):
+            try:
+                # 运行采样循环
+                messages = await self._run_sampling_loop()
+                
+                # 更新消息历史
+                if messages:
+                    st.session_state.messages = messages
+                
+            except Exception as e:
+                st.error(f"处理消息时出错: {str(e)}")
+                logger.exception("消息处理错误")
+
+    async def run(self):
+        """运行UI"""
+        st.title("🖥️ 计算机控制助手")
+        
+        # 渲染侧边栏
+        self.render_sidebar()
+        
+        # 主界面
+        # 1. 显示历史消息
+        with st.container():
+            self.render_messages()
+        
+        # 2. 处理用户输入
+        await self.handle_user_input()
+
+async def main():
+    """主函数"""
+    try:
+        ui = StreamlitUI()
+        await ui.run()
+    except Exception as e:
+        st.error(f"应用程序错误: {str(e)}")
+        logger.exception("应用程序错误")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    anyio.run(main)
