@@ -8,10 +8,6 @@ from typing import Any, Dict, Optional, Type
 from ..config import Config
 from .exceptions import ToolError, ValidationError
 
-# 配置日志
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 @dataclass
 class ToolResult:
     """工具执行结果"""

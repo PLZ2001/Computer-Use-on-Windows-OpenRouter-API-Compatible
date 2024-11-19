@@ -1,11 +1,9 @@
 """Streamlit Web界面模块"""
 
 import base64
-import json
-import logging
 import os
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -14,10 +12,6 @@ import anyio
 from .config import Config
 from .loop import APIProvider, sampling_loop, APIConfig, CallbackConfig
 from .tools import ToolResult
-
-# 配置日志
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # 加载环境变量
 load_dotenv()
@@ -57,7 +51,7 @@ class StreamlitUI:
         if "base_url" not in st.session_state:
             st.session_state.base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
         if "model" not in st.session_state:
-            st.session_state.model = os.getenv("OPENROUTER_MODEL", "anthropic/claude-2")
+            st.session_state.model = os.getenv("OPENROUTER_MODEL", "")
         if "hide_images" not in st.session_state:
             st.session_state.hide_images = False
 
@@ -205,46 +199,66 @@ class StreamlitUI:
 
     def render_messages(self):
         """渲染消息历史"""
-        messages = st.session_state.messages
-        for i, message in enumerate(messages):
-            if isinstance(message, dict):
-                role = message.get("role", "")
-                content = message.get("content", "")
-                
-                # 如果当前消息是role="user"且前一条是role="tool"，则跳过显示
-                if (role == "user" and 
-                    i > 0 and 
-                    isinstance(messages[i-1], dict) and 
-                    messages[i-1].get("role") == "tool"):
+        def _should_skip_user_message(index: int, messages: list) -> bool:
+            """判断是否需要跳过用户消息"""
+            return (index > 0 and 
+                    isinstance(messages[index-1], dict) and 
+                    messages[index-1].get("role") == "tool")
+
+        def _render_tool_call(message: dict, prev_messages: list) -> None:
+            """渲染工具调用消息"""
+            tool_call_id = message.get("tool_call_id", "")
+            if tool_call_id not in st.session_state.tools:
+                return
+
+            # 查找工具调用参数
+            tool_calls = prev_messages.get("tool_calls", [])
+            tool_call = next((call for call in tool_calls 
+                            if call["id"] == tool_call_id), {})
+            tool_args = tool_call.get("function", {}).get("arguments", "")
+
+            # 渲染工具使用信息和结果
+            self._render_message(
+                Sender.BOT,
+                {
+                    "type": "tool_use",
+                    "name": message.get("name", ""),
+                    "input": tool_args,
+                }
+            )
+            self._render_message(Sender.TOOL, st.session_state.tools[tool_call_id])
+
+        def _render_content_blocks(role: str, content: list) -> None:
+            """渲染消息内容块"""
+            for block in content:
+                if not isinstance(block, dict):
                     continue
-                
-                if role == "tool":
-                    # 处理工具执行结果
-                    tool_call_id = message.get("tool_call_id", "")
-                    if tool_call_id in st.session_state.tools:
-                        self._render_message(
-                            Sender.BOT,
-                            {
-                                "type": "tool_use",
-                                "name": message.get("name", ""),
-                                "input": next((call for call in messages[i-1]["tool_calls"] if call["id"] == tool_call_id), {}).get("function", {}).get("arguments", ""),
-                            }
-                        )
-                        self._render_message(Sender.TOOL, st.session_state.tools[tool_call_id])
-                elif isinstance(content, str):
-                    self._render_message(role, content)
-                elif isinstance(content, list):
-                    for block in content:
-                        if isinstance(block, dict):
-                            if block.get("type") == "tool_result":
-                                tool_id = block.get("tool_use_id", "")
-                                if tool_id in st.session_state.tools:
-                                    self._render_message(
-                                        Sender.TOOL, 
-                                        st.session_state.tools[tool_id]
-                                    )
-                            elif block.get("type") == "text":
-                                self._render_message(role, block.get("text", ""))
+                if block.get("type") == "tool_result":
+                    tool_id = block.get("tool_use_id", "")
+                    if tool_id in st.session_state.tools:
+                        self._render_message(Sender.TOOL, st.session_state.tools[tool_id])
+                elif block.get("type") == "text":
+                    self._render_message(role, block.get("text", ""))
+
+        # 主渲染逻辑
+        for i, message in enumerate(st.session_state.messages):
+            if not isinstance(message, dict):
+                continue
+
+            role = message.get("role", "")
+            content = message.get("content", "")
+
+            # 跳过特定条件下的用户消息
+            if role == "user" and _should_skip_user_message(i, st.session_state.messages):
+                continue
+
+            # 根据消息类型进行渲染
+            if role == "tool":
+                _render_tool_call(message, st.session_state.messages[i-1])
+            elif isinstance(content, str):
+                self._render_message(role, content)
+            elif isinstance(content, list):
+                _render_content_blocks(role, content)
 
     async def handle_user_input(self):
         """处理用户输入"""
@@ -337,7 +351,6 @@ class StreamlitUI:
                 
             except Exception as e:
                 st.error(f"处理消息时出错: {str(e)}")
-                logger.exception("消息处理错误")
 
     async def run(self):
         """运行UI"""
@@ -359,7 +372,6 @@ async def main():
         await ui.run()
     except Exception as e:
         st.error(f"应用程序错误: {str(e)}")
-        logger.exception("应用程序错误")
 
 if __name__ == "__main__":
     anyio.run(main)

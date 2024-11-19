@@ -5,10 +5,8 @@ import base64
 import io
 import logging
 import ctypes
-from dataclasses import dataclass
 from enum import StrEnum
-from typing import Dict, List, Literal, Optional, Tuple, TypedDict
-from uuid import uuid4
+from typing import List, Literal, Optional, Tuple, TypedDict
 
 import cv2
 import numpy as np
@@ -18,15 +16,6 @@ import pyperclip
 
 from .base import BaseTool, ToolResult, ToolFactory
 from .exceptions import ValidationError, ExecutionError
-from ..config import Config
-
-# 配置PyAutoGUI
-pyautogui.FAILSAFE = True
-
-class ScalingSource(StrEnum):
-    """缩放源类型"""
-    COMPUTER = "computer"
-    API = "api"
 
 class Action(StrEnum):
     """可执行的动作类型"""
@@ -42,12 +31,6 @@ class Action(StrEnum):
     CURSOR_POSITION = "cursor_position"
     SCROLL_UP = "scroll_up"
     SCROLL_DOWN = "scroll_down"
-
-@dataclass
-class Resolution:
-    """分辨率配置"""
-    width: int
-    height: int
 
 class ComputerToolOptions(TypedDict):
     """计算机工具选项"""

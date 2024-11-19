@@ -10,8 +10,6 @@ from .config import Config
 from .tools.exceptions import APIError
 from .tools.base import ToolFactory
 
-logger = logging.getLogger(__name__)
-
 class OpenrouterResponse:
     """OpenRouter API响应包装器"""
     
@@ -78,6 +76,7 @@ class OpenrouterClient:
             
             def __init__(self, client: 'OpenrouterClient'):
                 self.client = client
+                self.logger = logging.getLogger(self.__class__.__name__)
                 
             def with_raw_response(self) -> 'OpenrouterClient.Beta.Messages':
                 """方法链式调用"""
@@ -156,7 +155,7 @@ class OpenrouterClient:
                     try:
                         # 解析OpenRouter响应
                         openrouter_response = http_response.json()
-                        logger.debug(f"OpenRouter响应: {openrouter_response}")
+                        self.logger.debug(f"OpenRouter响应: {openrouter_response}")
                     except ValueError as e:
                         raise ValueError(f"无效的JSON响应: {e}")
                 
@@ -171,38 +170,52 @@ class OpenrouterClient:
                         raise
                     raise RuntimeError(f"从OpenRouter获取响应时发生意外错误: {e}")
                 
-                # 构建响应内容
-                content = []
-                if openrouter_response['choices'][0]["message"]["content"] is not None:
-                    content.append({
-                        "type": "text",
-                        "text": openrouter_response['choices'][0]["message"]["content"]
-                    })
-                if 'tool_calls' in openrouter_response['choices'][0]['message']:
-                    for item in openrouter_response['choices'][0]['message']['tool_calls']:
+                def _build_content(choice: Dict[str, Any]) -> List[Dict[str, Any]]:
+                    """构建响应内容列表"""
+                    content = []
+                    
+                    # 添加文本内容
+                    message = choice["message"]
+                    if message.get("content"):
                         content.append({
-                            "type": "tool_use", 
-                            "name": item['function']['name'],
-                            "input": json.loads(item['function']['arguments']),
-                            'id': item['id']
+                            "type": "text",
+                                "text": message["content"]
                         })
+                    
+                    # 添加工具调用内容
+                    if tool_calls := message.get("tool_calls"):
+                        content.extend([{
+                            "type": "tool_use", 
+                            "name": call["function"]["name"],
+                            "input": json.loads(call["function"]["arguments"]),
+                            "id": call["id"]
+                        } for call in tool_calls])
 
-                # 创建消息响应
-                message = {
-                    "id": "msg_" + http_response.headers.get("X-Request-ID", "unknown"),
-                    "type": "message",
-                    "role": "assistant",
-                    "content": content,
-                    "model": self.client.model,
-                    "stop_reason": "tool_use" if openrouter_response['choices'][0]['finish_reason'] == "tool_calls" else "stop_sequence",
-                    "stop_sequence": None,
-                    "usage": {
-                        "input_tokens": openrouter_response['usage']['prompt_tokens'],  
-                        "output_tokens": openrouter_response['usage']['completion_tokens']
+                    return content
+
+                def _create_message(response: Dict[str, Any], choice: Dict[str, Any], request_id: str) -> Dict[str, Any]:
+                    """创建标准化的消息响应"""
+                    return {
+                        "id": f"msg_{request_id}",
+                        "type": "message",
+                        "role": "assistant",
+                        "content": _build_content(choice),
+                        "model": self.client.model,
+                        "stop_reason": "tool_use" if choice["finish_reason"] == "tool_calls" else "stop_sequence",
+                        "stop_sequence": None,
+                        "usage": {
+                                "input_tokens": response["usage"]["prompt_tokens"],
+                                "output_tokens": response["usage"]["completion_tokens"]
+                        }
                     }
-                }
                 
-                return OpenrouterResponse(message, http_response), openrouter_response['choices'][0]['message']
+                # 获取首个选择结果
+                choice = openrouter_response["choices"][0]
+                request_id = http_response.headers.get("X-Request-ID", "unknown")
+                
+                # 构建最终响应
+                message = _create_message(openrouter_response, choice, request_id)
+                return OpenrouterResponse(message, http_response), choice["message"]
 
             def _get_tool_definitions(self) -> List[Dict[str, Any]]:
                 """获取工具定义"""

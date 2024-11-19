@@ -3,12 +3,9 @@
 from collections import defaultdict
 from pathlib import Path
 from typing import DefaultDict, List, Literal, Optional, get_args
-import logging
 
 from .base import BaseTool, ToolResult, ToolFactory
 from .exceptions import FileOperationError, ValidationError
-
-logger = logging.getLogger(__name__)
 
 Command = Literal[
     "view",

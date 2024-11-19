@@ -2,8 +2,6 @@
 
 import asyncio
 import concurrent.futures
-import logging
-import os
 import subprocess
 from dataclasses import dataclass
 from typing import Literal, Optional
@@ -11,8 +9,6 @@ from typing import Literal, Optional
 from .base import BaseTool, ToolResult, ToolFactory
 from .computer import ComputerTool
 from .exceptions import ExecutionError, ValidationError
-
-logger = logging.getLogger(__name__)
 
 @dataclass
 class CLIResult:
