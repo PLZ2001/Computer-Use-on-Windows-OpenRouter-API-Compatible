@@ -32,8 +32,8 @@ class BrowserTool(BaseTool):
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["visit", "get_content", "click", "back"],
-                "description": "浏览器操作类型: visit(访问URL), get_content(获取页面内容), click(点击元素), back(返回上一页)"
+                "enum": ["visit", "get_content", "click", "back", "type"],
+                "description": "浏览器操作类型: visit(访问URL), get_content(获取页面内容), click(点击元素), back(返回上一页), type(在文本框中输入文本)"
             },
             "url": {
                 "type": "string",
@@ -41,7 +41,11 @@ class BrowserTool(BaseTool):
             },
             "selector": {
                 "type": "string",
-                "description": "要点击的元素的CSS选择器"
+                "description": "要点击或输入文本的元素的CSS选择器"
+            },
+            "text": {
+                "type": "string",
+                "description": "要输入的文本内容"
             },
             "content_type": {
                 "type": "string",
@@ -233,20 +237,20 @@ class BrowserTool(BaseTool):
                         'text': element.get_text(strip=True) or '(无文本)',
                         'selector': selector
                     }
-                
-                # 针对不同类型元素收集特定属性
-                if element.name == 'a' and element.get('href'):
-                    url = element['href']
-                    if url.startswith('/'):
-                        url = f"{self._driver.current_url.rstrip('/')}{url}"
-                    elif url.startswith(('http://', 'https://')):
-                        element_info['url'] = url
-                elif element.name == 'button':
-                    element_info['type'] = element.get('type', 'button')
-                elif element.name == 'input':
-                    element_info['type'] = element.get('type', 'text')
-                
-                clickable_elements.append(element_info)
+                    
+                    # 针对不同类型元素收集特定属性
+                    if element.name == 'a' and element.get('href'):
+                        url = element['href']
+                        if url.startswith('/'):
+                            url = f"{self._driver.current_url.rstrip('/')}{url}"
+                        elif url.startswith(('http://', 'https://')):
+                            element_info['url'] = url
+                    elif element.name == 'button':
+                        element_info['type'] = element.get('type', 'button')
+                    elif element.name == 'input':
+                        element_info['type'] = element.get('type', 'text')
+                    
+                    clickable_elements.append(element_info)
             result['clickable_elements'] = clickable_elements
             
         elif content_type == "screenshot":
@@ -322,6 +326,28 @@ class BrowserTool(BaseTool):
                 title = self._driver.title
                 return ToolResult(output=f"点击后跳转到: {title}\nURL: {self._driver.current_url}")
 
+            elif action == "type":
+                selector = kwargs.get("selector")
+                text = kwargs.get("text")
+                if not selector:
+                    raise ValidationError("未指定要输入文本的元素选择器")
+                if not text:
+                    raise ValidationError("未指定要输入的文本内容")
+
+                try:
+                    element = self._wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
+                    if not element:
+                        raise ToolError(f"未找到文本输入框元素: {selector}")
+                    
+                    # 清除现有文本并输入新文本
+                    element.clear()
+                    element.send_keys(text)
+                    return ToolResult(output=f"已在元素 {selector} 中输入文本: {text}")
+                except TimeoutException:
+                    raise ToolError(f"等待文本输入框元素超时: {selector}")
+                except Exception as e:
+                    raise ToolError(f"文本输入操作失败: {str(e)}")
+
             elif action == "back":
                 if not self._driver.current_url:
                     raise ToolError("浏览器未访问任何页面")
@@ -351,7 +377,7 @@ class BrowserTool(BaseTool):
         if not action:
             raise ValidationError("未指定操作类型")
         
-        valid_actions = ["visit", "get_content", "click", "back"]
+        valid_actions = ["visit", "get_content", "click", "back", "type"]
         if action not in valid_actions:
             raise ValidationError(f"不支持的操作类型: {action}")
 
@@ -376,3 +402,8 @@ class BrowserTool(BaseTool):
         elif action == "click":
             if not kwargs.get("selector"):
                 raise ValidationError("click操作需要指定selector参数")
+        elif action == "type":
+            if not kwargs.get("selector"):
+                raise ValidationError("type操作需要指定selector参数")
+            if not kwargs.get("text"):
+                raise ValidationError("type操作需要指定text参数")

@@ -149,7 +149,8 @@ async def sampling_loop(
                 tool_result = _make_tool_result(
                     result,
                     content_block["name"],
-                    content_block["id"]
+                    content_block["id"],
+                    content_block["input"],
                 )
                 tool_results.append(tool_result)
                 callback_config.tool_output(result, content_block["id"])
@@ -239,7 +240,8 @@ def _response_to_params(
 def _make_tool_result(
     result: ToolResult,
     tool_name: str,
-    tool_use_id: str
+    tool_use_id: str,
+    input: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
     将工具结果转换为API格式。
@@ -260,7 +262,11 @@ def _make_tool_result(
         tool_result_content.extend([
             {
                 "type": "text",
-                "text": "工具执行出错",
+                "text": f"f'使用工具: {tool_name}\n输入: {input}'",
+            },
+            {
+                "type": "text",
+                "text": f"{tool_name}工具执行出错",
             },
             {
                 "type": "text",
@@ -272,7 +278,11 @@ def _make_tool_result(
             tool_result_content.extend([
                 {
                     "type": "text",
-                    "text": "工具执行结果如下",
+                    "text": f"f'使用工具: {tool_name}\n输入: {input}'",
+                },
+                {
+                    "type": "text",
+                    "text": f"{tool_name}工具执行结果如下",
                 },
                 {
                     "type": "text",
@@ -283,7 +293,11 @@ def _make_tool_result(
             tool_result_content.extend([
                 {
                     "type": "text",
-                    "text": "工具执行结果如下",
+                    "text": f"f'使用工具: {tool_name}\n输入: {input}'",
+                },
+                {
+                    "type": "text",
+                    "text": f"{tool_name}工具执行结果如下",
                 },
                 {
                     "type": "image_url",

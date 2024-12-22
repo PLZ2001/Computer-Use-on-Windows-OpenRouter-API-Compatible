@@ -201,7 +201,7 @@ class OpenrouterClient:
                         "role": "assistant",
                         "content": _build_content(choice),
                         "model": self.client.model,
-                        "stop_reason": "tool_use" if choice["finish_reason"] == "tool_calls" else "stop_sequence",
+                        "stop_reason": "tool_use" if choice.get("finish_reason") == "tool_calls" else "stop_sequence",
                         "stop_sequence": None,
                         "usage": {
                                 "input_tokens": response["usage"]["prompt_tokens"],
