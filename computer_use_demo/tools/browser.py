@@ -23,7 +23,7 @@ class Link:
 
 @ToolFactory.register
 class BrowserTool(BaseTool):
-    """简单的浏览器自动化工具，支持网页访问、内容获取和基本操作"""
+    """封闭的浏览器自动化工具，支持网页访问、内容获取和基本操作。注意：这是一个独立的浏览器环境，在使用过程中无法与其他工具协同工作"""
     
     name: Literal["browser"] = "browser"
 
