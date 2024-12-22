@@ -9,6 +9,7 @@ from .base import (
 from .command import CommandTool
 from .computer import ComputerTool
 from .edit import EditTool
+from .browser import BrowserTool
 from .exceptions import (
     ToolError,
     ValidationError,
@@ -29,6 +30,7 @@ __all__ = [
     'CommandTool',
     'ComputerTool',
     'EditTool',
+    'BrowserTool',
     
     # 异常类
     'ToolError',

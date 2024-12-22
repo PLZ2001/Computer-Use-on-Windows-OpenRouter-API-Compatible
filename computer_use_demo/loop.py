@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 import httpx
 
 from .config import Config
-from .tools import ComputerTool, CommandTool, EditTool, ToolCollection, ToolResult
+from .tools import ComputerTool, CommandTool, EditTool, BrowserTool, ToolCollection, ToolResult
 
 class APIProvider(StrEnum):
     """API提供者类型"""
@@ -40,7 +40,6 @@ SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITIES>
   - 日期: {datetime.today().strftime('%A, %B %d, %Y')}
 
 * 工具使用最佳实践:
-  - 优先使用'command'而不是'computer'
   - 尽可能一次调用多个函数/工具以提高效率
   - 在上下文不清晰时获取截图
   - 考虑函数/工具执行延迟
@@ -89,6 +88,7 @@ async def sampling_loop(
         ComputerTool(),
         CommandTool(),
         EditTool(),
+        BrowserTool(),
     )
 
     # 构建系统消息
