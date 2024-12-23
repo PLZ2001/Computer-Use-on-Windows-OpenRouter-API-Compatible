@@ -54,6 +54,8 @@ class StreamlitUI:
             st.session_state.model = os.getenv("OPENROUTER_MODEL", "")
         if "hide_images" not in st.session_state:
             st.session_state.hide_images = False
+        if "browser_instance" not in st.session_state:
+            st.session_state.browser_instance = None
 
     def render_sidebar(self):
         """渲染侧边栏"""
@@ -166,6 +168,13 @@ class StreamlitUI:
             
             # 清除历史
             if st.button("🗑️ 清除聊天历史"):
+                # 如果有浏览器实例，先关闭它
+                if st.session_state.browser_instance:
+                    try:
+                        st.session_state.browser_instance._driver.quit()
+                    except:
+                        pass
+                    st.session_state.browser_instance = None
                 st.session_state.messages = []
                 st.session_state.tools = {}
                 st.rerun()

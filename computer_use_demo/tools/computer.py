@@ -533,9 +533,26 @@ class ComputerTool(BaseTool):
             dpi = user32.GetDpiForSystem()
             dpi_scale = dpi / 96.0
             
+            # 定义MONITORINFO结构
+            class RECT(ctypes.Structure):
+                _fields_ = [
+                    ('left', ctypes.c_long),
+                    ('top', ctypes.c_long),
+                    ('right', ctypes.c_long),
+                    ('bottom', ctypes.c_long)
+                ]
+
+            class MONITORINFO(ctypes.Structure):
+                _fields_ = [
+                    ('cbSize', ctypes.c_ulong),
+                    ('rcMonitor', RECT),
+                    ('rcWork', RECT),
+                    ('dwFlags', ctypes.c_ulong)
+                ]
+
             # 获取主显示器信息
-            monitor_info = ctypes.wintypes.MONITORINFO()
-            monitor_info.cbSize = ctypes.sizeof(monitor_info)
+            monitor_info = MONITORINFO()
+            monitor_info.cbSize = ctypes.sizeof(MONITORINFO)
             monitor_handle = user32.MonitorFromWindow(0, 2)  # MONITOR_DEFAULTTOPRIMARY
             user32.GetMonitorInfoW(monitor_handle, ctypes.byref(monitor_info))
             

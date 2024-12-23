@@ -162,6 +162,12 @@ class OpenrouterClient:
                     if not isinstance(openrouter_response, dict):
                         raise ValueError(f"期望dict响应，得到 {type(openrouter_response)}")
                     
+                    if "choices" not in openrouter_response:
+                        raise ValueError(f"响应缺少'choices'字段: {openrouter_response}")
+                        
+                    if not openrouter_response["choices"]:
+                        raise ValueError(f"响应的choices为空: {openrouter_response}")
+                        
                     if "message" not in openrouter_response['choices'][0]:
                         raise ValueError(f"响应缺少'message'字段: {openrouter_response}")
                         

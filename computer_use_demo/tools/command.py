@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Literal, Optional
 
 from .base import BaseTool, ToolResult, ToolFactory
-from .computer import ComputerTool
 from .exceptions import ExecutionError, ValidationError
 
 @dataclass
@@ -35,7 +34,7 @@ class CLIResult:
 @ToolFactory.register
 class CommandTool(BaseTool):
     """Windows命令执行工具。通过cmd.exe执行单次命令，捕获命令的标准输出和错误输出。
-    当命令没有标准输出时，会自动获取屏幕截图作为结果。每次执行都是独立的进程。"""
+    每次执行都是独立的进程。"""
 
     name: Literal["command"] = "command"
     
@@ -49,10 +48,6 @@ class CommandTool(BaseTool):
         },
         "required": ["command"]
     }
-
-    def __init__(self):
-        super().__init__()
-        self.computer = ComputerTool()
 
     async def validate_params(self, **kwargs) -> None:
         """验证参数"""
@@ -101,11 +96,11 @@ class CommandTool(BaseTool):
                 self.logger.error(error_msg)
                 return ToolResult(error=error_msg)
 
-            # 如果没有stdout输出，返回截图
-            if not result.stdout.strip():
-                return await self.computer.take_screenshot()
-
-            return ToolResult(output=result.stdout)
+            output = result.stdout.strip()
+            if not output:
+                return ToolResult(output="命令执行成功,但没有标准输出。如有必要,请通过其他方式验证执行结果。")
+            
+            return ToolResult(output=output)
 
         except Exception as e:
             error_msg = f"命令执行失败: {str(e)}"
