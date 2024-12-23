@@ -290,13 +290,20 @@ class ComputerTool(BaseTool):
                 x, y = self.translator.api_to_screen(coordinate[0], coordinate[1])
                 self.logger.debug(f"移动到坐标: ({x}, {y})")
 
-                for _ in range(repeat_times):
-                    if action == Action.MOUSE_MOVE:
+                if action == Action.MOUSE_MOVE:
+                    for _ in range(repeat_times):
                         pyautogui.moveTo(x, y)
-                    elif action == Action.LEFT_CLICK_DRAG:
+                    if repeat_times > 1:
+                        return ToolResult(output=f"已移动鼠标到坐标: ({x}, {y}) {repeat_times}次")
+                    else:
+                        return ToolResult(output=f"已移动鼠标到坐标: ({x}, {y})")
+                elif action == Action.LEFT_CLICK_DRAG:
+                    for _ in range(repeat_times):
                         pyautogui.dragTo(x, y, button='left')
-                
-                return await self.take_screenshot()
+                    if repeat_times > 1:
+                        return ToolResult(output=f"已拖拽到坐标: ({x}, {y}) {repeat_times}次")
+                    else:
+                        return ToolResult(output=f"已拖拽到坐标: ({x}, {y})")
 
             if action in (Action.KEY, Action.TYPE):
                 if not isinstance(text, str):
@@ -313,9 +320,19 @@ class ComputerTool(BaseTool):
                         else:
                             self.logger.debug(f"按下按键: {text}")
                             pyautogui.press(text)
-                    return await self.take_screenshot()
+                    
+                    if len(key_parts) > 1:
+                        if repeat_times > 1:
+                            return ToolResult(output=f"已按下组合键: {'+'.join(key_parts)} {repeat_times}次")
+                        else:
+                            return ToolResult(output=f"已按下组合键: {'+'.join(key_parts)}")
+                    else:
+                        if repeat_times > 1:
+                            return ToolResult(output=f"已按下按键: {text} {repeat_times}次")
+                        else:
+                            return ToolResult(output=f"已按下按键: {text}")
                 elif action == Action.TYPE:
-                    results = []
+                    text_chunks = []
                     for _ in range(repeat_times):
                         for chunk in self._chunks(text, self.config.computer.TYPING_GROUP_SIZE):
                             self.logger.debug(f"输入文本块: {chunk}")
@@ -326,13 +343,17 @@ class ComputerTool(BaseTool):
                             pyautogui.hotkey('ctrl', 'v')
                             # 恢复原始剪贴板内容
                             pyperclip.copy(original_clipboard)
-                            results.append(ToolResult(output=chunk))
-                    screenshot = await self.take_screenshot()
-                    return ToolResult(
-                        output="".join(result.output or "" for result in results),
-                        error="".join(result.error or "" for result in results),
-                        base64_image=screenshot.base64_image,
-                    )
+                            text_chunks.append(chunk)
+                    
+                    full_text = ''.join(text_chunks)
+                    if repeat_times > 1:
+                        return ToolResult(
+                            output=f"已输入文本: {full_text} {repeat_times}次"
+                        )
+                    else:
+                        return ToolResult(
+                            output=f"已输入文本: {full_text}"
+                        )
 
             if action in (Action.SCROLL_UP, Action.SCROLL_DOWN):
                 # 使用提供的滚动量或默认值
@@ -343,11 +364,13 @@ class ComputerTool(BaseTool):
                 if action == Action.SCROLL_DOWN:
                     actual_amount = -actual_amount
                 
+                total_amount = actual_amount * repeat_times
                 for _ in range(repeat_times):
                     self.logger.debug(f"滚动量: {actual_amount}")
                     pyautogui.scroll(actual_amount)
                 
-                return await self.take_screenshot()
+                direction = "向上" if action == Action.SCROLL_UP else "向下"
+                return ToolResult(output=f"已{direction}滚动: {abs(total_amount)}像素")
 
             if action in (
                 Action.LEFT_CLICK,
@@ -364,10 +387,21 @@ class ComputerTool(BaseTool):
                     api_x, api_y = self.translator.screen_to_api(pos.x, pos.y)
                     return ToolResult(output=f"X={api_x},Y={api_y}")
                 else:
+                    click_type_map = {
+                        Action.LEFT_CLICK: "左键点击",
+                        Action.RIGHT_CLICK: "右键点击",
+                        Action.MIDDLE_CLICK: "中键点击",
+                        Action.DOUBLE_CLICK: "双击",
+                    }
+                    
                     if coordinate is not None:
                         # 缩放坐标并使用智能点击
                         x, y = self.translator.api_to_screen(coordinate[0], coordinate[1])
                         await self._smart_click(x, y, action, repeat_times)
+                        if repeat_times > 1:
+                            return ToolResult(output=f"已在坐标({x}, {y})处{click_type_map[action]} {repeat_times}次")
+                        else:
+                            return ToolResult(output=f"已在坐标({x}, {y})处{click_type_map[action]}")
                     else:
                         # 在当前位置点击
                         click_map = {
@@ -378,8 +412,11 @@ class ComputerTool(BaseTool):
                         }
                         for _ in range(repeat_times):
                             click_map[action]()
-                    
-                    return await self.take_screenshot()
+                        pos = pyautogui.position()
+                        if repeat_times > 1:
+                            return ToolResult(output=f"已在当前位置({pos.x}, {pos.y})处{click_type_map[action]} {repeat_times}次")
+                        else:
+                            return ToolResult(output=f"已在当前位置({pos.x}, {pos.y})处{click_type_map[action]}")
 
             raise ValidationError(f"无效的动作: {action}")
 

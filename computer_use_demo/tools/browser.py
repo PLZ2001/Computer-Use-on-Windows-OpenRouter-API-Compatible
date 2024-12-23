@@ -59,8 +59,8 @@ class BrowserTool(BaseTool):
             },
             "text_type": {
                 "type": "string",
-                "enum": ["all", "heading", "paragraph", "list", "link"],
-                "description": "当content_type为text时使用，指定要获取的文本类型: all(所有文本), heading(标题), paragraph(段落), list(列表), link(链接)"
+                "enum": ["heading", "paragraph", "list", "link"],
+                "description": "当content_type为text时使用，指定要获取的文本类型: heading(标题), paragraph(段落), list(列表), link(链接)"
             }
         },
         "required": ["action"]
@@ -169,7 +169,7 @@ class BrowserTool(BaseTool):
 
         return None
 
-    def _get_page_content(self, content_type: str = None, selector_type: str = "text", text_type: str = "all") -> Dict[str, Any]:
+    def _get_page_content(self, content_type: str = None, selector_type: str = "text", text_type: str = "paragraph") -> Dict[str, Any]:
         """获取页面内容"""
         # 等待页面加载
         try:
@@ -189,36 +189,33 @@ class BrowserTool(BaseTool):
                 tag.decompose()
             
             # 根据text_type筛选内容
-            if text_type == "all":
-                result['text'] = soup.get_text(separator='\n', strip=True)
-            else:
-                text_parts = []
-                if text_type == "heading":
-                    elements = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-                elif text_type == "paragraph":
-                    elements = soup.find_all('p')
-                elif text_type == "list":
-                    elements = []
-                    for list_tag in soup.find_all(['ul', 'ol']):
-                        elements.extend(list_tag.find_all('li'))
-                elif text_type == "link":
-                    elements = soup.find_all('a')
-                
-                for elem in elements:
-                    text = elem.get_text(strip=True)
-                    if text:  # 只添加非空文本
-                        if text_type == "heading":
-                            text_parts.append(f"{elem.name.upper()}: {text}")
-                        elif text_type == "link":
-                            href = elem.get('href', '')
-                            if href:
-                                text_parts.append(f"{text} -> {href}")
-                            else:
-                                text_parts.append(text)
+            text_parts = []
+            if text_type == "heading":
+                elements = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+            elif text_type == "paragraph":
+                elements = soup.find_all('p')
+            elif text_type == "list":
+                elements = []
+                for list_tag in soup.find_all(['ul', 'ol']):
+                    elements.extend(list_tag.find_all('li'))
+            elif text_type == "link":
+                elements = soup.find_all('a')
+            
+            for elem in elements:
+                text = elem.get_text(strip=True)
+                if text:  # 只添加非空文本
+                    if text_type == "heading":
+                        text_parts.append(f"{elem.name.upper()}: {text}")
+                    elif text_type == "link":
+                        href = elem.get('href', '')
+                        if href:
+                            text_parts.append(f"{text} -> {href}")
                         else:
                             text_parts.append(text)
-                
-                result['text'] = '\n'.join(text_parts)
+                    else:
+                        text_parts.append(text)
+            
+            result['text'] = '\n'.join(text_parts)
             
         elif content_type == "title":
             result['title'] = self._driver.title
@@ -288,7 +285,7 @@ class BrowserTool(BaseTool):
                 content = self._get_page_content(
                     content_type=content_type,
                     selector_type=kwargs.get("selector_type", "text"),
-                    text_type=kwargs.get("text_type", "all")
+                    text_type=kwargs.get("text_type", "paragraph")
                 )
                 
                 if content_type == "text":
@@ -397,7 +394,7 @@ class BrowserTool(BaseTool):
                     raise ValidationError("不支持的选择器类型")
             elif content_type == "text":
                 text_type = kwargs.get("text_type")
-                if text_type and text_type not in ["all", "heading", "paragraph", "list", "link"]:
+                if text_type and text_type not in ["heading", "paragraph", "list", "link"]:
                     raise ValidationError("不支持的文本类型")
         elif action == "click":
             if not kwargs.get("selector"):
