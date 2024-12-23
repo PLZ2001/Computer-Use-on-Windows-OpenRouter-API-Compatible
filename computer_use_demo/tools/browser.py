@@ -1,11 +1,13 @@
 """简单的浏览器自动化工具"""
 
 import base64
+from pathlib import Path
 from typing import Optional, Dict, Any, List, Literal
 from dataclasses import dataclass
 
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.edge.service import Service
+from selenium.webdriver.edge.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -68,22 +70,46 @@ class BrowserTool(BaseTool):
 
     def __init__(self):
         super().__init__()
-        self._driver: Optional[webdriver.Chrome] = None
+        self._driver: Optional[webdriver.Edge] = None
         self._wait: Optional[WebDriverWait] = None
+        self._cookies_file = Path("saved_browser_cookies.json")
 
     async def _ensure_browser(self) -> None:
         """确保浏览器已启动"""
         if not self._driver:
-            chrome_options = Options()
-            chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('--disable-dev-shm-usage')
-            chrome_options.add_argument('--disable-gpu')
-            chrome_options.add_argument('--disable-setuid-sandbox')
-            chrome_options.add_argument('--headless=new')
-            chrome_options.add_argument('--window-size=1280,800')
+            import json
+
+            # 设置Edge WebDriver选项
+            edge_options = Options()
+            edge_options.use_chromium = True
+            edge_options.add_argument('--headless=new')
+            edge_options.add_argument('--disable-gpu')
+            edge_options.add_argument('--no-sandbox')
+            edge_options.add_argument('--remote-allow-origins=*')
             
-            self._driver = webdriver.Chrome(options=chrome_options)
-            self._wait = WebDriverWait(self._driver, 10)
+            # 使用默认的Edge WebDriver
+            service = Service()
+            
+            try:
+                print("正在启动Edge浏览器...")
+                self._driver = webdriver.Edge(service=service, options=edge_options)
+                print("Edge WebDriver实例创建成功")
+                self._wait = WebDriverWait(self._driver, 10)
+                print("WebDriverWait实例创建成功")
+                
+                # 如果存在已保存的cookies文件，加载它
+                if self._cookies_file.exists():
+                    try:
+                        with open(self._cookies_file, 'r') as f:
+                            cookies = json.load(f)
+                        for cookie in cookies:
+                            self._driver.add_cookie(cookie)
+                    except Exception as e:
+                        print(f"加载cookies失败: {str(e)}")
+                        
+            except Exception as e:
+                raise ToolError(f"启动Edge浏览器失败: {str(e)}")
+            
 
     def _get_element_selector(self, element, selector_type: str) -> Optional[str]:
         """根据指定类型获取元素选择器"""
@@ -256,6 +282,17 @@ class BrowserTool(BaseTool):
             
         return result
 
+    def _save_cookies(self) -> None:
+        """保存当前的cookies到文件"""
+        try:
+            if self._driver:
+                import json
+                cookies = self._driver.get_cookies()
+                with open(self._cookies_file, 'w') as f:
+                    json.dump(cookies, f)
+        except Exception as e:
+            print(f"保存cookies失败: {str(e)}")
+
     async def execute(self, **kwargs) -> ToolResult:
         """执行浏览器操作"""
         action = kwargs.get("action")
@@ -272,7 +309,9 @@ class BrowserTool(BaseTool):
                 
                 self._driver.get(url)
                 title = self._driver.title
-                return ToolResult(output=f"已访问页面: {title}\nURL: {url}")
+                result = ToolResult(output=f"已访问页面: {title}\nURL: {url}")
+                self._save_cookies()  # 保存cookies
+                return result
 
             elif action == "get_content":
                 if not self._driver.current_url:
@@ -289,10 +328,14 @@ class BrowserTool(BaseTool):
                 )
                 
                 if content_type == "text":
-                    return ToolResult(output=content['text'])
+                    result = ToolResult(output=content['text'])
+                    self._save_cookies()  # 保存cookies
+                    return result
                     
                 elif content_type == "title":
-                    return ToolResult(output=content['title'])
+                    result = ToolResult(output=content['title'])
+                    self._save_cookies()  # 保存cookies
+                    return result
                     
                 elif content_type == "clickable":
                     elements = content['clickable_elements']
@@ -302,13 +345,17 @@ class BrowserTool(BaseTool):
                         output.append(f"   选择器: {elem['selector']}")
                         if 'url' in elem:
                             output.append(f"   链接: {elem['url']}")
-                    return ToolResult(output='\n'.join(output))
+                    result = ToolResult(output='\n'.join(output))
+                    self._save_cookies()  # 保存cookies
+                    return result
                     
                 elif content_type == "screenshot":
-                    return ToolResult(
+                    result = ToolResult(
                         output="页面截图",
                         base64_image=content['screenshot']
                     )
+                    self._save_cookies()  # 保存cookies
+                    return result
 
             elif action == "click":
                 selector = kwargs.get("selector")
@@ -321,7 +368,9 @@ class BrowserTool(BaseTool):
                 
                 element.click()
                 title = self._driver.title
-                return ToolResult(output=f"点击后跳转到: {title}\nURL: {self._driver.current_url}")
+                result = ToolResult(output=f"点击后跳转到: {title}\nURL: {self._driver.current_url}")
+                self._save_cookies()  # 保存cookies
+                return result
 
             elif action == "type":
                 selector = kwargs.get("selector")
@@ -339,7 +388,9 @@ class BrowserTool(BaseTool):
                     # 清除现有文本并输入新文本
                     element.clear()
                     element.send_keys(text)
-                    return ToolResult(output=f"已在元素 {selector} 中输入文本: {text}")
+                    result = ToolResult(output=f"已在元素 {selector} 中输入文本: {text}")
+                    self._save_cookies()  # 保存cookies
+                    return result
                 except TimeoutException:
                     raise ToolError(f"等待文本输入框元素超时: {selector}")
                 except Exception as e:
@@ -351,7 +402,9 @@ class BrowserTool(BaseTool):
                 
                 self._driver.back()
                 title = self._driver.title
-                return ToolResult(output=f"返回到页面: {title}\nURL: {self._driver.current_url}")
+                result = ToolResult(output=f"返回到页面: {title}\nURL: {self._driver.current_url}")
+                self._save_cookies()  # 保存cookies
+                return result
 
             else:
                 raise ValidationError(f"不支持的操作类型: {action}")
@@ -365,6 +418,7 @@ class BrowserTool(BaseTool):
     async def close(self) -> None:
         """关闭浏览器"""
         if self._driver:
+            self._save_cookies()  # 保存cookies
             self._driver.quit()
             self._driver = None
 
