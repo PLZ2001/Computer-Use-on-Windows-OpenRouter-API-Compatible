@@ -120,11 +120,12 @@ class BrowserTool(BaseTool):
         if selector_type == "text":
             text = element.get_text(strip=True)
             if text:
-                # 对于链接和按钮，使用特定标签的文本选择器
+                # 对于链接和按钮，使用更宽松的文本匹配
                 if tag_name in ['a', 'button']:
-                    return f"//{tag_name}[contains(text(), '{text}')]"
-                # 对于其他元素，使用通用文本选择器
-                return f"//*[contains(text(), '{text}')]"
+                    # 使用normalize-space()来处理空白字符
+                    return f"//{tag_name}[normalize-space()='{text}' or contains(normalize-space(),'{text}')]"
+                # 对于其他元素，使用更宽松的文本匹配
+                return f"//*[normalize-space()='{text}' or contains(normalize-space(),'{text}')]"
                 
         elif selector_type == "id":
             if element.get('id'):
@@ -162,39 +163,50 @@ class BrowserTool(BaseTool):
 
     def _find_clickable_element(self, selector: str) -> Optional[webdriver.remote.webelement.WebElement]:
         """尝试多种方式查找可点击元素"""
-        try:
-            # 1. 直接CSS选择器
-            element = self._wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, selector)))
-            if element:
-                return element
-        except:
-            pass
-
-        try:
-            # 2. XPath选择器
-            if selector.startswith('/'):
-                element = self._wait.until(EC.element_to_be_clickable((By.XPATH, selector)))
-                if element:
-                    return element
-        except:
-            pass
-
-        try:
-            # 3. 链接文本
-            element = self._wait.until(EC.element_to_be_clickable((By.LINK_TEXT, selector)))
-            if element:
-                return element
-        except:
-            pass
-
-        try:
-            # 4. 部分链接文本
-            element = self._wait.until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, selector)))
-            if element:
-                return element
-        except:
-            pass
-
+        # 定义查找策略列表
+        strategies = [
+            # CSS选择器
+            lambda s: (By.CSS_SELECTOR, s),
+            # XPath选择器
+            lambda s: (By.XPATH, s) if s.startswith('/') else None,
+            # ID选择器
+            lambda s: (By.ID, s[1:]) if s.startswith('#') else None,
+            # Class选择器
+            lambda s: (By.CLASS_NAME, s[1:]) if s.startswith('.') else None,
+            # 链接文本
+            lambda s: (By.LINK_TEXT, s),
+            # 部分链接文本
+            lambda s: (By.PARTIAL_LINK_TEXT, s),
+            # 标签名
+            lambda s: (By.TAG_NAME, s) if s.lower() in ['a', 'button', 'input'] else None
+        ]
+        
+        # 尝试每种查找策略
+        for strategy in strategies:
+            try:
+                locator = strategy(selector)
+                if locator:
+                    # 首先尝试查找可点击元素
+                    try:
+                        element = self._wait.until(EC.element_to_be_clickable(locator))
+                        if element:
+                            return element
+                    except:
+                        # 如果元素不可点击，尝试查找是否存在该元素
+                        try:
+                            element = self._wait.until(EC.presence_of_element_located(locator))
+                            # 如果元素存在但不可见，尝试滚动到元素位置
+                            if element:
+                                self._driver.execute_script("arguments[0].scrollIntoView(true);", element)
+                                # 再次检查元素是否可点击
+                                element = self._wait.until(EC.element_to_be_clickable(locator))
+                                if element:
+                                    return element
+                        except:
+                            continue
+            except:
+                continue
+                
         return None
 
     def _get_page_content(self, content_type: str = None, selector_type: str = "text", text_type: str = "paragraph") -> Dict[str, Any]:
