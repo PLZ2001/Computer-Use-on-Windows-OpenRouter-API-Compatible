@@ -44,7 +44,7 @@ class BrowserTool(BaseTool):
             },
             "selector": {
                 "type": "string",
-                "description": "用于定位要操作的元素(比如按钮/输入框等)的查找方式，通常从get_content操作的返回结果中获取"
+                "description": "用于定位要操作的元素的查找方式"
             },
             "input_text": {
                 "type": "string",
@@ -60,13 +60,13 @@ class BrowserTool(BaseTool):
             },
             "content_type": {
                 "type": "string",
-                "enum": ["text", "title", "url", "clickable", "screenshot", "structure", "form", "media", "element_state"],
-                "description": "要获取的内容类型: text(页面中的文字内容), title(网页标题), url(当前网页地址), clickable(可以点击的按钮/链接等), screenshot(网页截图), structure(网页的整体布局结构), form(表单及其输入框), media(图片/视频/音频), element_state(按钮等元素的状态如可点击/禁用等)"
+                "enum": ["text", "title", "url", "clickable", "screenshot", "media"],
+                "description": "要获取的内容类型: text(页面中的文字内容), title(网页标题), url(当前网页地址), clickable(可以点击的元素), screenshot(网页截图), media(图片/视频/音频)"
             },
             "selector_type": {
                 "type": "string",
-                "enum": ["button", "a", "input", "select", "textarea", "form", "div", "span", "custom"],
-                "description": "指定要查找的HTML元素类型: button(按钮), a(链接), input(输入框), select(下拉选择框), textarea(文本区域), form(表单), div(容器), span(文本容器), custom(自定义元素)"
+                "enum": ["a", "div", "custom"],
+                "description": "指定要查找的HTML元素类型: a(链接), div(通用容器元素，常用于组织和布局页面内容，可能包含其他元素或作为可点击区域), custom(自定义元素)"
             },
             "selector_attrs": {
                 "type": "object",
@@ -74,8 +74,8 @@ class BrowserTool(BaseTool):
             },
             "text_type": {
                 "type": "string",
-                "enum": ["heading", "paragraph", "list", "link", "table", "code", "quote", "comment", "button", "label", "placeholder", "message"],
-                "description": "要获取的具体文字类型: heading(大标题/小标题), paragraph(正文段落), list(项目列表), link(可点击的链接文字), table(表格内容), code(代码片段), quote(引用内容), comment(注释说明), button(按钮文字), label(输入框标签), placeholder(输入框提示文字), message(提示/警告/错误消息)"
+                "enum": ["heading", "paragraph", "span"],
+                "description": "要获取的具体文字类型: heading(大标题/小标题), paragraph(正文段落), span(行内文本)"
             }
         },
         "required": ["action"],
@@ -178,16 +178,6 @@ class BrowserTool(BaseTool):
             if self._driver and self._driver.current_url:
                 href = urljoin(self._driver.current_url, href)
             selectors.append(f"[href='{href}']")
-        elif selector_type == 'input':
-            if element.get('name'):
-                name = element['name'].replace("'", "\\'")
-                selectors.append(f"[name='{name}']")
-            if element.get('type'):
-                input_type = element['type'].replace("'", "\\'")
-                selectors.append(f"[type='{input_type}']")
-        elif selector_type == 'button' and element.get('type'):
-            button_type = element['type'].replace("'", "\\'")
-            selectors.append(f"[type='{button_type}']")
             
         # 添加用户指定的属性条件
         if selector_attrs:
@@ -243,7 +233,20 @@ class BrowserTool(BaseTool):
         
         try:
             # 获取页面内容
-            html = self._driver.page_source
+            # 获取包含Shadow DOM内容的完整HTML
+            html = self._driver.execute_script("""
+                function getShadowDOMContent(element) {
+                    let content = element.innerHTML || '';
+                    const shadowRoots = element.querySelectorAll('*');
+                    for (const elem of shadowRoots) {
+                        if (elem.shadowRoot) {
+                            content += elem.shadowRoot.innerHTML;
+                        }
+                    }
+                    return content;
+                }
+                return document.documentElement.outerHTML + getShadowDOMContent(document.documentElement);
+            """)
             if not html:
                 raise ToolError("无法获取页面内容")
         except Exception as e:
@@ -266,64 +269,8 @@ class BrowserTool(BaseTool):
                 elements = soup.find_all('p')
                 if text:  # filter_text
                     elements = [e for e in elements if text.lower() in e.get_text().lower()]
-            elif text_type == "list":
-                elements = []
-                for list_tag in soup.find_all(['ul', 'ol']):
-                    items = list_tag.find_all('li')
-                    if text:  # filter_text
-                        items = [i for i in items if text.lower() in i.get_text().lower()]
-                    elements.extend(items)
-            elif text_type == "link":
-                elements = soup.find_all('a')
-                if text:  # filter_text
-                    elements = [e for e in elements if text.lower() in e.get_text().lower()]
-            elif text_type == "table":
-                elements = []
-                # 处理表格内容
-                tables = soup.find_all('table')
-                for table in tables:
-                    # 获取表头
-                    headers = [th.get_text(strip=True) for th in table.find_all('th')]
-                    if headers:
-                        text_parts.append("表头: " + " | ".join(headers))
-                    # 获取数据行
-                    for row in table.find_all('tr'):
-                        cells = [td.get_text(strip=True) for td in row.find_all('td')]
-                        if cells:
-                            text_parts.append("数据: " + " | ".join(cells))
-            elif text_type == "code":
-                elements = soup.find_all(['code', 'pre'])
-                if text:  # filter_text
-                    elements = [e for e in elements if text.lower() in e.get_text().lower()]
-            elif text_type == "quote":
-                elements = soup.find_all(['blockquote', 'q', 'cite'])
-                if text:  # filter_text
-                    elements = [e for e in elements if text.lower() in e.get_text().lower()]
-            elif text_type == "comment":
-                elements = []
-                # 获取HTML注释
-                from bs4.element import Comment
-                comments = soup.find_all(string=lambda text: isinstance(text, Comment))
-                for comment in comments:
-                    text_parts.append(f"注释: {comment.strip()}")
-            elif text_type == "button":
-                elements = soup.find_all(['button', 'input[type="button"]', 'input[type="submit"]'])
-                if text:  # filter_text
-                    elements = [e for e in elements if text.lower() in (e.get_text().lower() or e.get('value', '').lower())]
-            elif text_type == "label":
-                elements = soup.find_all('label')
-                if text:  # filter_text
-                    elements = [e for e in elements if text.lower() in e.get_text().lower()]
-            elif text_type == "placeholder":
-                elements = []
-                # 处理占位符文本
-                for input_elem in soup.find_all(['input', 'textarea']):
-                    if placeholder := input_elem.get('placeholder'):
-                        text_parts.append(f"占位符: {placeholder}")
-            elif text_type == "message":
-                # 查找常见的消息容器
-                elements = soup.find_all(class_=lambda x: x and any(c in str(x).lower() for c in 
-                    ['message', 'alert', 'notification', 'toast', 'error', 'warning', 'success', 'info']))
+            elif text_type == "span":
+                elements = soup.find_all('span')
                 if text:  # filter_text
                     elements = [e for e in elements if text.lower() in e.get_text().lower()]
             
@@ -332,29 +279,6 @@ class BrowserTool(BaseTool):
                 if text:  # 只添加非空文本
                     if text_type == "heading":
                         text_parts.append(f"{elem.name.upper()}: {text}")
-                    elif text_type == "link":
-                        href = elem.get('href', '')
-                        if href:
-                            text_parts.append(f"{text} -> {href}")
-                        else:
-                            text_parts.append(text)
-                    elif text_type == "code":
-                        text_parts.append(f"代码:\n{text}")
-                    elif text_type == "quote":
-                        text_parts.append(f"引用: {text}")
-                    elif text_type == "button":
-                        text_parts.append(f"按钮: {text}")
-                    elif text_type == "label":
-                        for_id = elem.get('for', '')
-                        if for_id:
-                            text_parts.append(f"标签[{for_id}]: {text}")
-                        else:
-                            text_parts.append(f"标签: {text}")
-                    elif text_type == "message":
-                        classes = elem.get('class', [])
-                        msg_type = next((c for c in classes if any(t in c.lower() for t in 
-                            ['error', 'warning', 'success', 'info'])), 'message')
-                        text_parts.append(f"{msg_type}: {text}")
                     else:
                         text_parts.append(text)
             
@@ -385,7 +309,6 @@ class BrowserTool(BaseTool):
                         
                 elements = soup.find_all(True, attrs=find_attrs)
             else:
-                # 查找常规元素
                 elements = soup.find_all(selector_type)
                 
             # 如果提供了text参数，筛选包含该文本的元素
@@ -424,82 +347,6 @@ class BrowserTool(BaseTool):
         elif content_type == "screenshot":
             screenshot = self._driver.get_screenshot_as_png()
             result['screenshot'] = base64.b64encode(screenshot).decode()
-            
-        elif content_type == "structure":
-            # 提取页面的DOM结构
-            structure = {
-                'main': [],
-                'navigation': [],
-                'sidebar': [],
-                'footer': []
-            }
-            
-            # 提取主要内容
-            main = soup.find('main') or soup.find(id='main') or soup.find(class_='main')
-            if main:
-                elements = main.find_all(['h1', 'h2', 'h3', 'p'])
-                if text:  # filter_text
-                    elements = [e for e in elements if text.lower() in e.get_text(strip=True).lower()]
-                structure['main'] = [elem.get_text(strip=True) for elem in elements]
-                
-            # 提取导航
-            nav = soup.find('nav') or soup.find(id='nav') or soup.find(class_='nav')
-            if nav:
-                elements = nav.find_all('a')
-                if text:  # filter_text
-                    elements = [e for e in elements if text.lower() in e.get_text(strip=True).lower()]
-                structure['navigation'] = [{'text': a.get_text(strip=True), 'href': a.get('href')} 
-                                        for a in elements]
-                
-            # 提取侧边栏
-            sidebar = soup.find(id='sidebar') or soup.find(class_='sidebar')
-            if sidebar:
-                elements = sidebar.find_all(['h3', 'h4', 'p'])
-                if text:  # filter_text
-                    elements = [e for e in elements if text.lower() in e.get_text(strip=True).lower()]
-                structure['sidebar'] = [elem.get_text(strip=True) for elem in elements]
-                
-            # 提取页脚
-            footer = soup.find('footer') or soup.find(id='footer') or soup.find(class_='footer')
-            if footer:
-                elements = footer.find_all(['p', 'a'])
-                if text:  # filter_text
-                    elements = [e for e in elements if text.lower() in e.get_text(strip=True).lower()]
-                structure['footer'] = [elem.get_text(strip=True) for elem in elements]
-                
-            result['structure'] = structure
-            
-        elif content_type == "form":
-            # 查找表单元素
-            forms = []
-            form_elements = soup.find_all('form')
-            # 如果提供了text参数，筛选包含该文本的表单
-            if text:  # filter_text
-                form_elements = [f for f in form_elements if text.lower() in (
-                    f.get_text(strip=True).lower() or 
-                    f.get('title', '').lower() or 
-                    f.get('aria-label', '').lower()
-                )]
-            
-            for form in form_elements:
-                form_data = {
-                    'id': form.get('id', ''),
-                    'action': form.get('action', ''),
-                    'method': form.get('method', 'get'),
-                    'fields': []
-                }
-                for field in form.find_all(['input', 'select', 'textarea']):
-                    field_info = {
-                        'type': field.get('type', 'text'),
-                        'name': field.get('name', ''),
-                        'id': field.get('id', ''),
-                        'required': field.has_attr('required'),
-                        'value': field.get('value', ''),
-                        'placeholder': field.get('placeholder', '')
-                    }
-                    form_data['fields'].append(field_info)
-                forms.append(form_data)
-            result['forms'] = forms
             
         elif content_type == "media":
             media = {
@@ -545,35 +392,6 @@ class BrowserTool(BaseTool):
                 media['audio'].append(audio_info)
                 
             result['media'] = media
-            
-        elif content_type == "element_state":
-            element_states = []
-            # 查找指定类型的元素
-            elements = soup.find_all(selector_type)
-            # 如果提供了text参数，筛选包含该文本的元素
-            if text:  # filter_text
-                elements = [e for e in elements if text.lower() in e.get_text(strip=True).lower()]
-            
-            for element in elements:
-                selector = self._get_unique_selector(element, selector_type)
-                if selector:
-                    try:
-                        web_element = self._driver.find_element(By.CSS_SELECTOR, selector)
-                        state = {
-                            'selector': selector,
-                            'visible': web_element.is_displayed(),
-                            'enabled': web_element.is_enabled(),
-                            'selected': web_element.is_selected() if web_element.get_attribute('type') in ['checkbox', 'radio'] else None,
-                            'classes': web_element.get_attribute('class'),
-                            'attributes': {
-                                attr: web_element.get_attribute(attr)
-                                for attr in ['disabled', 'readonly', 'aria-hidden']
-                            }
-                        }
-                        element_states.append(state)
-                    except:
-                        continue
-            result['element_states'] = element_states
             
         return result
 
@@ -641,42 +459,6 @@ class BrowserTool(BaseTool):
                     )
                     return result
                     
-                elif content_type == "structure":
-                    structure = content['structure']
-                    output = []
-                    if structure['main']:
-                        output.append("主要内容:")
-                        output.extend(f"  {text}" for text in structure['main'])
-                    if structure['navigation']:
-                        output.append("\n导航:")
-                        output.extend(f"  {link['text']} -> {link['href']}" for link in structure['navigation'])
-                    if structure['sidebar']:
-                        output.append("\n侧边栏:")
-                        output.extend(f"  {text}" for text in structure['sidebar'])
-                    if structure['footer']:
-                        output.append("\n页脚:")
-                        output.extend(f"  {text}" for text in structure['footer'])
-                    result = ToolResult(output='\n'.join(output))
-                    return result
-                    
-                elif content_type == "form":
-                    forms = content['forms']
-                    output = []
-                    for i, form in enumerate(forms, 1):
-                        output.append(f"表单 {i}:")
-                        output.append(f"  ID: {form['id']}")
-                        output.append(f"  Action: {form['action']}")
-                        output.append(f"  Method: {form['method']}")
-                        output.append("  字段:")
-                        for field in form['fields']:
-                            output.append(f"    - {field['name']} ({field['type']})")
-                            if field['required']:
-                                output.append("      必填")
-                            if field['placeholder']:
-                                output.append(f"      提示: {field['placeholder']}")
-                    result = ToolResult(output='\n'.join(output))
-                    return result
-                    
                 elif content_type == "media":
                     media = content['media']
                     output = []
@@ -702,24 +484,6 @@ class BrowserTool(BaseTool):
                     result = ToolResult(output='\n'.join(output))
                     return result
                     
-                elif content_type == "element_state":
-                    states = content['element_states']
-                    output = []
-                    for i, state in enumerate(states, 1):
-                        output.append(f"元素 {i}:")
-                        output.append(f"  选择器: {state['selector']}")
-                        output.append(f"  可见: {'是' if state['visible'] else '否'}")
-                        output.append(f"  启用: {'是' if state['enabled'] else '否'}")
-                        if state['selected'] is not None:
-                            output.append(f"  选中: {'是' if state['selected'] else '否'}")
-                        if state['classes']:
-                            output.append(f"  类: {state['classes']}")
-                        for attr, value in state['attributes'].items():
-                            if value:
-                                output.append(f"  {attr}: {value}")
-                    result = ToolResult(output='\n'.join(output))
-                    return result
-
             elif action == "click":
                 selector = kwargs.get("selector")
                 text = kwargs.get("target_text")  # 获取target_text参数用于文本定位
@@ -891,7 +655,7 @@ class BrowserTool(BaseTool):
                 raise ValidationError("get_content操作需要指定content_type参数")
                 
             valid_content_types = ["text", "title", "url", "clickable", "screenshot", 
-                                 "structure", "form", "media", "element_state"]
+                                 "media"]
             if content_type not in valid_content_types:
                 raise ValidationError(f"不支持的内容类型: {content_type}")
                 
@@ -901,9 +665,7 @@ class BrowserTool(BaseTool):
                 if not text_type:
                     raise ValidationError("content_type为text时必须指定text_type参数")
                     
-                valid_text_types = ["heading", "paragraph", "list", "link", "table", 
-                                  "code", "quote", "comment", "button", "label", 
-                                  "placeholder", "message"]
+                valid_text_types = ["heading", "paragraph", "span"]
                 if text_type not in valid_text_types:
                     raise ValidationError(f"不支持的文本类型: {text_type}")
                     
@@ -916,8 +678,7 @@ class BrowserTool(BaseTool):
                 if not selector_type:
                     raise ValidationError("content_type为clickable时必须指定selector_type参数")
                     
-                valid_selector_types = ["button", "a", "input", "select", "textarea", 
-                                      "form", "div", "span", "custom"]
+                valid_selector_types = ["a", "div", "custom"]
                 if selector_type not in valid_selector_types:
                     raise ValidationError(f"不支持的元素类型: {selector_type}")
                     
@@ -950,8 +711,7 @@ class BrowserTool(BaseTool):
                 
             if has_text_selector:
                 selector_type = kwargs["selector_type"]
-                valid_selector_types = ["button", "a", "input", "select", "textarea", 
-                                      "form", "div", "span", "custom"]
+                valid_selector_types = ["a", "div", "custom"]
                 if selector_type not in valid_selector_types:
                     raise ValidationError(f"不支持的元素类型: {selector_type}")
                     
